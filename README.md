@@ -22,19 +22,18 @@ The network architecture is kept modular from the remainder of the computational
 
 ```python
 @staticmethod
-def my_network(x, config, training, **kwargs):
+def my_network(x, config, **kwargs):
     """
     Inputs:
     x: example data
     config: class defining hyperparameter values
-    training: Placeholder boolean tensor to distinguish between training/prediction
 
     Returns:
     network logits
     """
 
     # To prevent overfitting, we don't even look at the inputs!
-    return tf.random_uniform([x.shape[0]], minval=0, maxval=config.n_classes, dtype=tf.int32, seed=42)
+    return tf.random_uniform([x.shape[0], config.n_classes], seed=42)
 ```
 Now open model.py and edit the first line under the Model init:
 ```python
