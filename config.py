@@ -6,20 +6,18 @@ class config_train(object):
     num_epochs = 512
     batch_size = 128
     ema_decay = 0.999
-    learning_rate = 1e-3
-    n_classes = 10
-    conv_keep_prob = 0.7
-    dense_keep_prob = 0.7
-    im_x = 32
-    im_y = 32
-    lr_decay_rate = 5e-3
+    learning_rate = 1e-4
     momentum = 0.9
-    weight_decay = 5e-4
-    steps_per_epoch = 50000//batch_size
-    # entropy-sgd specific
-    g0 = 5e-3
-    g1 = 5e-4
-    L = 20
+    vocab_size = 1200
+    rnn_layers = 2
+    embedding_dim = 128
+    rnn_cell = 'gru'
+    hidden_units = 256
+    output_keep_prob = 0.75
+    max_seq_len = 15
+    recurrent_keep_prob = 0.8
+    conv_keep_prob = 0.5
+    n_classes = 7
 
 class config_test(object):
     mode = 'alpha'
@@ -27,24 +25,23 @@ class config_test(object):
     num_epochs = 512
     batch_size = 256
     ema_decay = 0.999
-    learning_rate = 8e-4
-    n_classes = 10
-    conv_keep_prob = 1.0
-    dense_keep_prob = 1.0
-    im_x = 32
-    im_y = 32
-    lr_decay_rate = 2e-5
+    learning_rate = 1e-4
     momentum = 0.9
-    weight_decay = 5e-4
-    steps_per_epoch = 50000//batch_size
-    # entropy-sgd specific
-    g0 = 1e-3
-    g1 = 1e-4
-    L = 20
+    vocab_size = 1200
+    rnn_layers = 2
+    embedding_dim = 128
+    rnn_cell = 'gru'
+    hidden_units = 256
+    output_keep_prob = 0.75
+    max_seq_len = 15
+    recurrent_keep_prob = 1.0
+    conv_keep_prob = 1.0
+    n_classes = 7
 
 class directories(object):
-    train = 'tfrecords/cifar10/cifar10_train.tfrecord' #'/var/local/tmp/jtan/cifar10/cifar10_train.tfrecord'
-    test = 'tfrecords/cifar10/cifar10_test.tfrecord' #'/var/local/tmp/jtan/cifar10/cifar10_test.tfrecord'
+    train = 'data/deepdive_cleaned_tokenized_train.h5' #'/var/local/tmp/jtan/cifar10/cifar10_train.tfrecord'
+    test = 'data/deepdive_cleaned_tokenized_test.h5' #'/var/local/tmp/jtan/cifar10/cifar10_test.tfrecord'
+    eval = 'data/deepdive_cleaned_tokenized_test.h5' #'/var/local/tmp/jtan/cifar10/cifar10_test.tfrecord'
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'

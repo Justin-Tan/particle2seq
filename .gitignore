@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# checkpoints
+# checkpoints/*
+!checkpoints/.gitkeep
+!checkpoints/best/.gitkeep
+
 # Distribution / packaging
 .Python
 env/
