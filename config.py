@@ -43,9 +43,9 @@ class config_test(object):
     embedding_dim = 13
 
 class directories(object):
-    train = 'data/small_train.h5'
-    test = 'data/small_test.h5'
-    eval = 'data/new_b2sy.h5'
+    train = 'data/medium_train.h5'
+    test = 'data/medium_test.h5'
+    eval = 'data/medium_val.h5'
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'

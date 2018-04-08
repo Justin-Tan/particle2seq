@@ -10,7 +10,12 @@ class Model():
     def __init__(self, config, directories, features, labels, args, evaluate=False):
         # Build the computational graph
 
-        arch = Network.sequence_deep_conv
+        if args.architecture == 'deep_conv':
+            arch = Network.sequence_deep_conv
+        elif args.architecture == 'recurrent':
+            arch = Network.birnn_dynamic
+        else:
+            arch = Network.sequence_deep_conv
 
         self.global_step = tf.Variable(0, trainable=False)
         self.handle = tf.placeholder(tf.string, shape=[])

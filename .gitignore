@@ -10,6 +10,7 @@ __pycache__/
 # checkpoints/*
 !checkpoints/.gitkeep
 !checkpoints/best/.gitkeep
+*.slurm
 
 # Distribution / packaging
 .Python

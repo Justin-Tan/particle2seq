@@ -9,6 +9,7 @@ class Network(object):
 
     @staticmethod
     def birnn_dynamic(x, config, training, attention=False):
+        print('Using recurrent architecture')
          # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
@@ -173,6 +174,7 @@ class Network(object):
 
     @staticmethod
     def sequence_deep_conv(x, config, training, reuse=False, actv=tf.nn.relu):
+        print('Using convolutional architecture')
         init = tf.contrib.layers.xavier_initializer()
         kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
         

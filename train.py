@@ -82,6 +82,7 @@ def main(**kwargs):
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
     parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
+    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture")
     args = parser.parse_args()
     config = config_train
 
