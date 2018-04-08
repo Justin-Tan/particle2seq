@@ -17,7 +17,9 @@ class config_train(object):
     max_seq_len = 15
     recurrent_keep_prob = 0.8
     conv_keep_prob = 0.5
-    n_classes = 7
+    n_classes = 2
+    features_per_particle = 13
+    embedding_dim = 13
 
 class config_test(object):
     mode = 'alpha'
@@ -36,12 +38,14 @@ class config_test(object):
     max_seq_len = 15
     recurrent_keep_prob = 1.0
     conv_keep_prob = 1.0
-    n_classes = 7
+    n_classes = 2
+    features_per_particle = 13
+    embedding_dim = 13
 
 class directories(object):
-    train = 'data/deepdive_cleaned_tokenized_train.h5' #'/var/local/tmp/jtan/cifar10/cifar10_train.tfrecord'
-    test = 'data/deepdive_cleaned_tokenized_test.h5' #'/var/local/tmp/jtan/cifar10/cifar10_test.tfrecord'
-    eval = 'data/deepdive_cleaned_tokenized_test.h5' #'/var/local/tmp/jtan/cifar10/cifar10_test.tfrecord'
+    train = 'data/small_train.h5'
+    test = 'data/small_test.h5'
+    eval = 'data/new_b2sy.h5'
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'

@@ -20,11 +20,12 @@ def train(config, args):
     global_step, n_checkpoints, v_f1_best = 0, 0, 0.
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
-    tokens, labels = Data.load_data(directories.train)
-    test_tokens, test_labels = Data.load_data(directories.test)
+    features, labels = Data.load_data(directories.train)
+    test_features, test_labels = Data.load_data(directories.test)
+    config.max_seq_len = int(features.shape[1]/config.features_per_particle)
 
     # Build graph
-    cnn = Model(config, directories, tokens=tokens, labels=labels, args=args)
+    cnn = Model(config, directories, features=features, labels=labels, args=args)
     saver = tf.train.Saver()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
@@ -44,11 +45,11 @@ def train(config, args):
                 print('{} restored.'.format(args.restore_path))
 
         sess.run(cnn.test_iterator.initializer, feed_dict={
-            cnn.test_tokens_placeholder:test_tokens,
+            cnn.test_features_placeholder:test_features,
             cnn.test_labels_placeholder:test_labels})
 
         for epoch in range(config.num_epochs):
-            sess.run(cnn.train_iterator.initializer, feed_dict={cnn.tokens_placeholder:tokens, cnn.labels_placeholder:labels})
+            sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
             # Run diagnostics
             v_f1_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
@@ -65,12 +66,12 @@ def train(config, args):
 
                 except KeyboardInterrupt:
                     save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                        'bcmp_{}_last.ckpt'.format(args.name)), global_step=epoch)
+                        'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
                     print('Interrupted, model saved to: ', save_path)
                     sys.exit()
 
         save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                               'bcmp_{}_end.ckpt'.format(args.name)),
+                               'p2seq_{}_end.ckpt'.format(args.name)),
                                global_step=epoch)
 
     print("Training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
@@ -80,7 +81,7 @@ def main(**kwargs):
     parser.add_argument("-rl", "--restore_last", help="restore last saved model", action="store_true")
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
-    parser.add_argument("-n", "--name", default="text-clf", help="Checkpoint/Tensorboard label")
+    parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
     args = parser.parse_args()
     config = config_train
 

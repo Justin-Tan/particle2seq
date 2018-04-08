@@ -14,9 +14,15 @@ $ python3 train.py -opt momentum --name my_network
 
 ## Results
 Experiments run over Belle II Monte Carlo data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
-`graph showing recurrent convergence/loss vs. standard dense nets`
-`graph showing conv convergence/loss vs. standard dense nets`
-
+```
+graph showing recurrent convergence/loss vs. standard dense nets
+```
+```
+graph showing conv convergence/loss vs. standard dense nets
+```
+```
+graph showing convergence on high-multiplicity decay chain vs. standard dense nets
+```
 ## Extensions
 The network architecture is kept modular from the remainder of the computational graph. To swap out the network for your custom one, create a `@staticmethod` under the `Network` class in `network.py`:
 
@@ -33,7 +39,7 @@ def my_network(x, config, **kwargs):
     """
 
     # To prevent overfitting, we don't even look at the inputs!
-    return tf.random_uniform([x.shape[0], config.n_classes], seed=42)
+    return tf.random_normal([x.shape[0], config.n_classes], seed=42)
 ```
 Now open model.py and edit the first line under the Model init:
 ```python
@@ -41,7 +47,7 @@ class Model():
     def __init__(self, **kwargs):
 
         arch = Network.my_network
-        # Define the rest of the computational graph
+        # Define the computational graph
 ```
 
 ### Dependencies

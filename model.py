@@ -7,7 +7,7 @@ from network import Network
 from data import Data
 
 class Model():
-    def __init__(self, config, directories, tokens, labels, args, evaluate=False):
+    def __init__(self, config, directories, features, labels, args, evaluate=False):
         # Build the computational graph
 
         arch = Network.sequence_deep_conv
@@ -17,15 +17,15 @@ class Model():
         self.training_phase = tf.placeholder(tf.bool)
         self.rnn_keep_prob = tf.placeholder(tf.float32)
 
-        self.tokens_placeholder = tf.placeholder(tf.int32, [tokens.shape[0], config.max_seq_len])
+        self.features_placeholder = tf.placeholder(tf.float32, [features.shape[0], features.shape[1]])
         self.labels_placeholder = tf.placeholder(tf.int32, labels.shape)
-        self.test_tokens_placeholder = tf.placeholder(tf.int32)
+        self.test_features_placeholder = tf.placeholder(tf.float32)
         self.test_labels_placeholder = tf.placeholder(tf.int32)
 
-        steps_per_epoch = int(self.tokens_placeholder.get_shape()[0])//config.batch_size
+        steps_per_epoch = int(self.features_placeholder.get_shape()[0])//config.batch_size
 
-        train_dataset = Data.load_dataset(self.tokens_placeholder, self.labels_placeholder, config.batch_size)
-        test_dataset = Data.load_dataset(self.test_tokens_placeholder, self.test_labels_placeholder, config.batch_size, test=True)
+        train_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, config.batch_size)
+        test_dataset = Data.load_dataset(self.test_features_placeholder, self.test_labels_placeholder, config.batch_size, test=True)
         self.iterator = tf.contrib.data.Iterator.from_string_handle(self.handle,
                                                                     train_dataset.output_types,
                                                                     train_dataset.output_shapes)
@@ -36,7 +36,7 @@ class Model():
         embedding_encoder = tf.get_variable('embeddings', [config.vocab_size, config.embedding_dim])
 
         if evaluate:
-            self.example = self.tokens_placeholder
+            self.example = self.features_placeholder
             self.labels = self.labels_placeholder
             word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
             self.logits = arch(word_embeddings, config, self.training_phase)
@@ -48,9 +48,9 @@ class Model():
         else:
             self.example, self.labels = self.iterator.get_next()
 
-        word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
+        # word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
 
-        self.logits = arch(word_embeddings, config, self.training_phase)
+        self.logits = arch(self.example, config, self.training_phase)
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)

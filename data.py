@@ -9,6 +9,14 @@ class Data(object):
     @staticmethod
     def load_data(filename):
         df = pd.read_hdf(filename, key='df').sample(frac=1).reset_index(drop=True)
+        aux = ['labels', 'MCtype', 'channel', 'evtNum', 'idx', 'mbc', 'nCands']
+        df_features = df.drop(aux, axis=1)
+
+        return np.nan_to_num(df_features.values), df['labels'].values
+
+    @staticmethod
+    def load_tokenized_data(filename):
+        df = pd.read_hdf(filename, key='df').sample(frac=1).reset_index(drop=True)
         tokens = df['tokens']
 
         # Get lengths of each row of data
@@ -36,7 +44,7 @@ class Data(object):
         dataset = dataset.padded_batch(
             batch_size,
             padded_shapes=(tf.TensorShape([None]), tf.TensorShape([])),
-            padding_values=(0,0))
+            padding_values=(0.,0))
 
         if test:
             dataset = dataset.repeat()
