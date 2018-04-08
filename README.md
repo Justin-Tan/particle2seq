@@ -58,3 +58,11 @@ class Model():
 ### Resources
 * [Convolutional/recurrent networks for sequence modelling](https://arxiv.org/pdf/1803.01271.pdf)
 * [Convolutional seq2seq learning](https://arxiv.org/pdf/1705.03122.pdf)
+
+### Future Work
+* Add embedding layer
+* Experiment with 1D convolutions / TCNs
+* Port to Pytorch
+
+### Contact
+Feel free to contact me at [justin.tan@coepp.org.au](mailto:justin.tan@coepp.org.au) for access to the dataset or questions about the model.

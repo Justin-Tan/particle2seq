@@ -33,13 +33,13 @@ class Model():
         self.train_iterator = train_dataset.make_initializable_iterator()
         self.test_iterator = test_dataset.make_initializable_iterator()
 
-        embedding_encoder = tf.get_variable('embeddings', [config.vocab_size, config.embedding_dim])
+        # embedding_encoder = tf.get_variable('embeddings', [config.features_per_particle, config.embedding_dim])
 
         if evaluate:
             self.example = self.features_placeholder
             self.labels = self.labels_placeholder
-            word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
-            self.logits = arch(word_embeddings, config, self.training_phase)
+            # word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
+            self.logits = arch(self.example, config, self.training_phase)
             self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)
             self.ema = tf.train.ExponentialMovingAverage(decay=config.ema_decay, num_updates=self.global_step)
             correct_prediction = tf.equal(self.labels, tf.cast(self.pred, tf.int32))
@@ -79,18 +79,14 @@ class Model():
             self.train_op = tf.group(maintain_averages_op)
 
         self.str_accuracy, self.update_accuracy = tf.metrics.accuracy(self.labels, self.pred)
-        precision, self.update_precision = tf.metrics.precision(self.labels, self.pred)
-        recall, self.update_recall = tf.metrics.recall(self.labels, self.pred)
-        self.f1 = 2 * precision * recall / (precision + recall)
-        self.precision = precision
-        self.recall = recall
         correct_prediction = tf.equal(self.labels, tf.cast(self.pred, tf.int32))
+        _, self.auc_op = tf.metrics.auc(predictions=self.pred, labels=self.labels, num_thresholds=1024)
         self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         tf.summary.scalar('accuracy', self.accuracy)
         tf.summary.scalar('learning_rate', learning_rate)
         tf.summary.scalar('cost', self.cost)
-        tf.summary.scalar('f1 score', self.f1)
+        tf.summary.scalar('auc', self.auc_op)
         self.merge_op = tf.summary.merge_all()
 
         self.train_writer = tf.summary.FileWriter(

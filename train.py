@@ -17,7 +17,7 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 def train(config, args):
 
     start_time = time.time()
-    global_step, n_checkpoints, v_f1_best = 0, 0, 0.
+    global_step, n_checkpoints, v_auc_best = 0, 0, 0.
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     features, labels = Data.load_data(directories.train)
@@ -38,7 +38,7 @@ def train(config, args):
             # Continue training saved model
             saver.restore(sess, ckpt.model_checkpoint_path)
             print('{} restored.'.format(ckpt.model_checkpoint_path))
-        else:
+        else:   
             if args.restore_path:
                 new_saver = tf.train.import_meta_graph('{}.meta'.format(args.restore_path))
                 new_saver.restore(sess, args.restore_path)
@@ -52,8 +52,8 @@ def train(config, args):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
             # Run diagnostics
-            v_f1_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
-                test_handle, start_time, v_f1_best, epoch, args.name)
+            v_ayc_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+                test_handle, start_time, v_auc_best, epoch, args.name)
             while True:
                 try:
                     # Update weights
