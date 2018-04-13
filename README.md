@@ -12,13 +12,6 @@ $ python3 train.py -h
 $ python3 train.py -opt momentum --name my_network
 ```
 
-## Results
-Experiments run over 1 ab<sup>-1</sup> of simulated Belle II data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
-
-![Alt text](show/loss_log.png?raw=true "Training/test loss")
-```
-graph showing convergence on high-multiplicity decay chain vs. standard dense nets
-```
 ## Extensions
 The network architecture is kept modular from the remainder of the computational graph. To swap out the network for your custom one, create a `@staticmethod` under the `Network` class in `network.py`:
 
@@ -44,6 +37,13 @@ class Model():
 
         arch = Network.my_network
         # Define the computational graph
+```
+## Results
+Experiments run over 1 ab<sup>-1</sup> of simulated Belle II data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
+
+![Alt text](show/test_loss_log.png?raw=true "Training/test loss for dense/recurrent/deep conv. models")
+```
+graph showing convergence on high-multiplicity decay chain vs. standard dense nets
 ```
 
 ### Dependencies
