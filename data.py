@@ -7,15 +7,19 @@ from config import config_train, config_test, directories
 class Data(object):
 
     @staticmethod
-    def load_data(filename):
+    def load_data(filename, evaluate=False):
         df = pd.read_hdf(filename, key='df').sample(frac=1).reset_index(drop=True)
         aux = ['labels', 'MCtype', 'channel', 'evtNum', 'idx', 'mbc', 'nCands']
         df_features = df.drop(aux, axis=1)
 
-        return np.nan_to_num(df_features.values), df['labels'].values
+        if evaluate:
+            return df, np.nan_to_num(df_features.values), df['labels'].values
+        else:
+            return np.nan_to_num(df_features.values), df['labels'].values
 
     @staticmethod
     def load_tokenized_data(filename):
+        print('Reading data from', filename)
         df = pd.read_hdf(filename, key='df').sample(frac=1).reset_index(drop=True)
         tokens = df['tokens']
 

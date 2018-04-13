@@ -9,6 +9,7 @@ class Network(object):
 
     @staticmethod
     def birnn_dynamic(x, config, training, attention=False):
+
         print('Using recurrent architecture')
          # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
@@ -57,7 +58,7 @@ class Network(object):
         birnn_output = tf.concat(outputs,2)
 
         if attention:  # invoke soft attention mechanism - attend to different particles
-            summary_vector = attention_A(birnn_output, config.attention_dim, my_method=False)
+            summary_vector = attention(birnn_output, config.attention_dim, custom=False)
         else:  # Select last relevant output
             summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
         
@@ -69,8 +70,10 @@ class Network(object):
         return logits_RNN
 
     @staticmethod
-    def birnn(x, config, training, attention=False):
-         # reshape outputs to [batch_size, max_time_steps, n_features]
+    def birnn(x, config, training):
+
+        print('Using recurrent architecture')
+        # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
         sequence_lengths = Diagnostics.length(rnn_inputs)
@@ -111,15 +114,20 @@ class Network(object):
             dtype=tf.float32,
             parallel_iterations=128)
 
-        if attention:  # invoke soft attention mechanism - attend to different particles
-            summary_vector = attention_A(birnn_output, config.attention_dim, my_method=False)
+        if config.attention:  # invoke soft attention mechanism - attend to different particles
+            summary_vector = Diagnostics.soft_attention(birnn_output, config.attention_dim)
         else:  # Select last relevant output
             summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
-        
-        print(summary_vector.get_shape().as_list())
+            print('Summarizing vector shape:', summary_vector.get_shape().as_list())
+
         # Fully connected layer for classification
         with tf.variable_scope("fc"):
-            logits_RNN = tf.layers.dense(summary_vector, units=config.n_classes, kernel_initializer=init)
+            W_fc = tf.get_variable('W_fc', shape=[2*config.hidden_units, 2], initializer=init)
+            b_fc = tf.get_variable('b_fc', shape=[2], initializer=tf.constant_initializer(0.01))
+            logits_RNN = tf.matmul(summary_vector, W_fc) + b_fc
+
+        # with tf.variable_scope("fc"):
+        #    logits_RNN = tf.layers.dense(summary_vector, units=config.n_classes, kernel_initializer=init)
         
         return logits_RNN    
 
@@ -129,12 +137,12 @@ class Network(object):
         kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
         
         # reshape outputs to [batch_size, max_time_steps, config.embedding_dim, 1]
-        max_time = tf.shape(x)[1]
-        cnn_inputs = tf.expand_dims(tf.reshape(x, [-1, max_time, config.embedding_dim]), -1)
+        # max_time = tf.shape(x)[1]
         max_time = config.max_seq_len
+        cnn_inputs = tf.expand_dims(tf.reshape(x, [-1, max_time, config.embedding_dim]), -1)
 
         # Convolution + max-pooling over n-word windows
-        filter_sizes = [3,4,5]
+        filter_sizes = [2,3,4,5]
         n_filters = 128  # output dimensionality
         feature_maps = list()
 
@@ -151,7 +159,7 @@ class Network(object):
 
                 # Max over-time pooling - final size [batch_size, 1, 1, n_filters]
                 # pool_i = tf.nn.max_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
-                pool_i = tf.nn.avg_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
+                pool_i = tf.nn.max_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
 
                 # conv_i = tf.layers.conv2d(cnn_inputs, filters=n_filters, kernel_size=[filter_size, config.embedding_dim], 
                 #     padding='valid', use_bias=True, activation=actv, kernel_initializer=init)
@@ -201,7 +209,7 @@ class Network(object):
 
                 # Max over-time pooling - final size [batch_size, 1, 1, n_filters]
                 # pool_i = tf.nn.max_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
-                pool_i = tf.nn.avg_pool(conv_i, ksize=[1,filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
+                pool_i = tf.nn.max_pool(conv_i, ksize=[1,filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
 
                 # conv_i = tf.layers.conv2d(cnn_inputs, filters=n_filters, kernel_size=[filter_size, config.embedding_dim], 
                 #     padding='valid', use_bias=True, activation=actv, kernel_initializer=init)

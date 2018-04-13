@@ -9,6 +9,88 @@ from sklearn.metrics import f1_score
 class Diagnostics(object):
     
     @staticmethod
+    def soft_attention(inputs, attention_dim, feedforward=True):
+        print('Using attention mechanism')
+        hidden_units = inputs.shape[2].value  # D = dim of RNN hidden state
+        init = tf.contrib.layers.xavier_initializer()
+
+        W_ff = tf.get_variable('W_ff', shape=[hidden_units, attention_dim], initializer=init)
+        b_ff = tf.get_variable('b_ff', shape=[attention_dim], initializer=init)
+        u_query = tf.get_variable('context', shape=[attention_dim], initializer=init)
+
+        with tf.name_scope('v'):
+            # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
+            #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_dim
+            v = tf.tanh(tf.tensordot(inputs, W_ff, axes=1) + b_ff)
+
+        # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+        energy = tf.tensordot(v, u_query, axes=1, name='attention_energy')  # (B,T) shape
+        alphas = tf.nn.softmax(energy)         # (B,T) shape
+
+        # Output: (B,D)
+        output = tf.reduce_sum(inputs * tf.expand_dims(alphas,-1), 1)
+
+        return output
+
+    @staticmethod
+    def attention(summaries, attention_dim, feedforward=True, custom=True):
+
+        # init = tf.random_normal_initializer(stddev=0.512)
+        init = tf.contrib.layers.xavier_initializer()
+
+        sequence_length = summaries.get_shape()[1].value
+        hidden_units = summaries.get_shape()[2].value
+        # Flatten to apply same weights at each time step
+        A_re = tf.reshape(summaries, [-1, hidden_units])
+
+        W_ff = tf.get_variable('W_ff', shape=[hidden_units, attention_dim])
+        b_ff = tf.get_variable('b_ff', shape=[attention_dim])
+        u_context = tf.get_variable('context', shape=[attention_dim], initializer=init)
+
+        input_embedding = tf.tanh(tf.add(tf.matmul(A_re, W_ff), tf.reshape(b_ff, [1,-1])))
+        energy = tf.matmul(input_embedding, tf.expand_dims(u_context,1))
+        attention_energy = tf.reshape(energy, [-1, sequence_length])
+        p = tf.nn.softmax(attention_energy)
+        D = tf.matrix_diag(p)
+
+        # Compute weighted sum of summaries
+        if custom:
+            output = tf.reduce_sum(tf.matmul(D, summaries), 1)
+        else:
+            output = tf.reduce_sum(summaries * tf.reshape(p, [-1, sequence_length, 1]), 1)
+
+        return output
+
+    @staticmethod
+    def achtung(summaries, attention_dim, feedforward=True, custom=True):
+
+        sequence_length = summaries.get_shape()[1].value
+        hidden_units = summaries.get_shape()[2].value
+        B_re = tf.reshape(summaries, [hidden_units, -1])
+
+        W_ff = tf.get_variable('W_ff', shape = [attention_dim, hidden_units])
+        b_ff = tf.get_variable('b_ff', shape = [attention_dim])
+        u_context = tf.get_variable('context', shape = [attention_dim], initializer = tf.random_normal_initializer(stddev = 0.512))
+
+        prod = tf.matmul(W_ff, B_re)
+        b_ff_tiled = tf.tile(tf.expand_dims(b_ff,1), [1,prod.shape[1].value])
+
+        input_embedding = tf.tanh(tf.add(prod, b_ff_tiled))
+        energy = tf.matmul(tf.transpose(tf.expand_dims(u_context,1)), input_embedding)
+        energy = tf.reshape(energy, [-1, sequence_length])
+
+        p = tf.nn.softmax(energy)
+        D = tf.matrix_diag(p)
+
+        # Compute weighted sum of summaries
+        if custom:
+            output = tf.reduce_sum(tf.matmul(D, summaries), 1)
+        else:
+            output = tf.reduce_sum(summaries * tf.reshape(p, [-1, sequence_length, 1]), 1)
+
+        return output
+
+    @staticmethod
     def length(sequence):
         used = tf.sign(tf.reduce_max(tf.abs(sequence), 2))
         length = tf.reduce_sum(used, 1)

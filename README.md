@@ -13,13 +13,9 @@ $ python3 train.py -opt momentum --name my_network
 ```
 
 ## Results
-Experiments run over Belle II Monte Carlo data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
-```
-graph showing recurrent convergence/loss vs. standard dense nets
-```
-```
-graph showing conv convergence/loss vs. standard dense nets
-```
+Experiments run over 1 ab<sup>-1</sup> of simulated Belle II data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
+
+![Alt text](show/loss_log.png?raw=true "Training/test loss")
 ```
 graph showing convergence on high-multiplicity decay chain vs. standard dense nets
 ```

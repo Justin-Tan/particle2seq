@@ -14,12 +14,14 @@ class config_train(object):
     rnn_cell = 'gru'
     hidden_units = 256
     output_keep_prob = 0.75
-    max_seq_len = 15
+    max_seq_len = 13
     recurrent_keep_prob = 0.8
     conv_keep_prob = 0.5
     n_classes = 2
     features_per_particle = 13
     embedding_dim = 13
+    attention = False
+    attention_dim = 256
 
 class config_test(object):
     mode = 'alpha'
@@ -35,17 +37,19 @@ class config_test(object):
     rnn_cell = 'gru'
     hidden_units = 256
     output_keep_prob = 0.75
-    max_seq_len = 15
+    max_seq_len = 13
     recurrent_keep_prob = 1.0
     conv_keep_prob = 1.0
     n_classes = 2
     features_per_particle = 13
     embedding_dim = 13
+    attention = False
+    attention_dim = 256
 
 class directories(object):
-    train = 'data/medium_train.h5'
-    test = 'data/medium_test.h5'
-    eval = 'data/medium_val.h5'
+    train = 'data/medium_train2.h5'
+    test = 'data/medium_test2.h5'
+    eval = 'data/small_eval.h5'
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'

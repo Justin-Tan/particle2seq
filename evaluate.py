@@ -17,10 +17,10 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 def evaluate(config, directories, ckpt, args):
     pin_cpu = tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU':0})
     start = time.time()
-    eval_tokens, eval_labels = Data.load_data(directories.eval)
+    eval_df, eval_features, eval_labels = Data.load_data(directories.eval, evaluate=True)
 
     # Build graph
-    cnn = Model(config, directories, tokens=eval_tokens, labels=eval_labels, args=args, evaluate=True)
+    cnn = Model(config, directories, features=eval_features, labels=eval_labels, args=args, evaluate=True)
 
     # Restore the moving average version of the learned variables for eval.
     variables_to_restore = cnn.ema.variables_to_restore()
@@ -30,7 +30,6 @@ def evaluate(config, directories, ckpt, args):
         # Initialize variables
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        sess.run(tf.tables_initializer())
         assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
 
         if args.restore_last and ckpt.model_checkpoint_path:
@@ -42,13 +41,16 @@ def evaluate(config, directories, ckpt, args):
                 new_saver.restore(sess, args.restore_path)
                 print('Previous checkpoint {} restored.'.format(args.restore_path))
 
-        eval_dict = {cnn.training_phase: False, cnn.example: eval_tokens, cnn.labels: eval_labels}
+        eval_dict = {cnn.training_phase: False, cnn.example: eval_features, cnn.labels: eval_labels}
 
-        y_pred, v_acc = sess.run([cnn.pred,cnn.accuracy], feed_dict=eval_dict)
-        v_f1 = f1_score(eval_labels, y_pred, average='macro', labels=np.unique(y_pred))
+        y_prob, y_pred, v_acc, v_auc = sess.run([cnn.softmax, cnn.pred, cnn.accuracy, cnn.auc_op], feed_dict=eval_dict)
+        eval_df['y_pred'] = y_pred
+        eval_df['y_prob'] = y_prob
+
+        eval_df.to_hdf('df_sequence_val_{}.h5'.format(args.architecture), key='df')
 
         print("Validation accuracy: {:.3f}".format(v_acc))
-        print("Validation F1: {:.3f}".format(v_f1))
+        print("Validation AUC: {:.3f}".format(v_auc))
         print("Eval complete. Duration: %g s" %(time.time()-start))
 
         return v_acc
@@ -56,9 +58,10 @@ def evaluate(config, directories, ckpt, args):
 
 def main(**kwargs):
     parser = argparse.ArgumentParser()
-#     parser.add_argument("-i", "--input", help="path to test dataset in h5 format")
+#   parser.add_argument("-i", "--input", help="path to test dataset in h5 format")
     parser.add_argument("-rl", "--restore_last", help="restore last saved model", action="store_true")
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
+    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture")
     args = parser.parse_args()
 
     # Load training, test data

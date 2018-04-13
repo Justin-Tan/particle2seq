@@ -6,11 +6,15 @@ __pycache__/
 # C extensions
 *.so
 
-# checkpoints
+# checkpoints/data
 # checkpoints/*
 !checkpoints/.gitkeep
 !checkpoints/best/.gitkeep
 *.slurm
+*.log
+*.h5
+*.npy
+*.meta
 
 # Distribution / packaging
 .Python

@@ -20,6 +20,7 @@ def train(config, args):
     global_step, n_checkpoints, v_auc_best = 0, 0, 0.
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
+    print('Reading data ...')
     features, labels = Data.load_data(directories.train)
     test_features, test_labels = Data.load_data(directories.test)
     config.max_seq_len = int(features.shape[1]/config.features_per_particle)
@@ -52,14 +53,15 @@ def train(config, args):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
             # Run diagnostics
-            v_ayc_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+            v_auc_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
+
             while True:
                 try:
                     # Update weights
-                    sess.run([cnn.train_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True,
+                    global_step, *ops = sess.run([cnn.global_step, cnn.train_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True,
                         cnn.handle: train_handle})
-
+                    
                 except tf.errors.OutOfRangeError:
                     print('End of epoch!')
                     break
