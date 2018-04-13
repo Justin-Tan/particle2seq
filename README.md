@@ -41,7 +41,7 @@ class Model():
 ## Results
 Experiments run over 1 ab<sup>-1</sup> of simulated Belle II data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
 
-![Alt text](show/test_loss_log.png?raw=true "Training/test loss for dense/recurrent/deep conv. models")
+![Alt text](show/all_loss_log.png?raw=true "Training/test loss for dense/recurrent/deep conv. models")
 ```
 graph showing convergence on high-multiplicity decay chain vs. standard dense nets
 ```
