@@ -17,6 +17,8 @@ class Model():
             arch = Network.birnn
         elif args.architecture == 'simple_conv':
             arch = Network.sequence_conv2d
+        elif args.architecture == 'projection':
+            arch = Network.sequence_conv_projection
 
         self.global_step = tf.Variable(0, trainable=False)
         self.handle = tf.placeholder(tf.string, shape=[])
@@ -40,22 +42,16 @@ class Model():
         self.test_iterator = test_dataset.make_initializable_iterator()
 
         # embedding_encoder = tf.get_variable('embeddings', [config.features_per_particle, config.embedding_dim])
+        # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.ex_ids)
+
+        self.example, self.labels = self.iterator.get_next()
 
         if evaluate:
-            self.example = self.features_placeholder
-            self.labels = self.labels_placeholder
-            # word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
             self.logits = arch(self.example, config, self.training_phase)
             self.softmax, self.pred = tf.nn.softmax(self.logits)[:,1], tf.argmax(self.logits, 1)
             self.ema = tf.train.ExponentialMovingAverage(decay=config.ema_decay, num_updates=self.global_step)
-            correct_prediction = tf.equal(self.labels, tf.cast(self.pred, tf.int32))
-            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-            _, self.auc_op = tf.metrics.auc(predictions=self.pred, labels=self.labels, num_thresholds=1024)
             return
-        else:
-            self.example, self.labels = self.iterator.get_next()
 
-        # word_embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
 
         self.logits = arch(self.example, config, self.training_phase)
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)

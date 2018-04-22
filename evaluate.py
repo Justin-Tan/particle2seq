@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 import time, os
 import argparse
-from sklearn.metrics import f1_score
+from sklearn.metrics import roc_auc_score
 
 # User-defined
 from network import Network
@@ -14,10 +14,15 @@ from config import config_test, directories
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
-def evaluate(config, directories, ckpt, args):
-    pin_cpu = tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU':0})
+def evaluate(config, args):
+
     start = time.time()
-    eval_df, eval_features, eval_labels = Data.load_data(directories.eval, evaluate=True)
+    ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
+    assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
+    
+    print('Reading data...')
+    eval_df, eval_features, eval_labels = Data.load_data(directories.val, evaluate=True)
+    config.max_seq_len = int(eval_features.shape[1]/config.features_per_particle)
 
     # Build graph
     cnn = Model(config, directories, features=eval_features, labels=eval_labels, args=args, evaluate=True)
@@ -26,11 +31,11 @@ def evaluate(config, directories, ckpt, args):
     variables_to_restore = cnn.ema.variables_to_restore()
     saver = tf.train.Saver(variables_to_restore)
 
-    with tf.Session(config=pin_cpu) as sess:
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         # Initialize variables
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
+        train_handle = sess.run(cnn.train_iterator.string_handle())
 
         if args.restore_last and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
@@ -41,17 +46,36 @@ def evaluate(config, directories, ckpt, args):
                 new_saver.restore(sess, args.restore_path)
                 print('Previous checkpoint {} restored.'.format(args.restore_path))
 
-        eval_dict = {cnn.training_phase: False, cnn.example: eval_features, cnn.labels: eval_labels}
+        sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder: eval_features,
+            cnn.labels_placeholder: eval_labels})
 
-        y_prob, y_pred, v_acc, v_auc = sess.run([cnn.softmax, cnn.pred, cnn.accuracy, cnn.auc_op], feed_dict=eval_dict)
+        labels, probs, preds = list(), list(), list()
+        while True:
+            try:
+                eval_dict = {cnn.training_phase: False, cnn.handle: train_handle}
+                y_true, y_prob, y_pred = sess.run([cnn.labels, cnn.softmax, cnn.pred], feed_dict=eval_dict)
+                probs.append(y_prob)
+                preds.append(y_pred)
+                labels.append(y_true)
+
+            except tf.errors.OutOfRangeError:
+                print('End of evaluation. Elapsed time: {:.2f}'.format(time.time()-start))
+                break
+
+        y_prob = np.hstack(probs)
+        y_pred = np.hstack(preds)
+        y_true = np.hstack(labels)
+
         eval_df['y_pred'] = y_pred
         eval_df['y_prob'] = y_prob
 
         eval_df.to_hdf('df_sequence_val_{}.h5'.format(args.architecture), key='df')
 
+        v_acc = np.equal(y_true, y_pred).mean()
+        v_auc = roc_auc_score(y_true, y_prob)
+
         print("Validation accuracy: {:.3f}".format(v_acc))
         print("Validation AUC: {:.3f}".format(v_auc))
-        print("Eval complete. Duration: %g s" %(time.time()-start))
 
         return v_acc
 
@@ -64,11 +88,8 @@ def main(**kwargs):
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture")
     args = parser.parse_args()
 
-    # Load training, test data
-    ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
-
     # Evaluate
-    val_accuracy = evaluate(config_test, directories, ckpt, args)
+    val_accuracy = evaluate(config_test, args)
 
 if __name__ == '__main__':
     main()
