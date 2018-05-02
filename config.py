@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 
 class config_train(object):
     mode = 'beta'
@@ -14,14 +15,15 @@ class config_train(object):
     rnn_cell = 'gru'
     hidden_units = 256
     output_keep_prob = 0.75
-    max_seq_len = 13
+    max_seq_len = 9
     recurrent_keep_prob = 0.8
     conv_keep_prob = 0.5
     n_classes = 2
-    features_per_particle = 13
-    embedding_dim = 13
-    attention = False
+    features_per_particle = 11
+    embedding_dim = features_per_particle
+    attention = True
     attention_dim = 256
+    proj_dim = 32
 
 class config_test(object):
     mode = 'alpha'
@@ -37,19 +39,21 @@ class config_test(object):
     rnn_cell = 'gru'
     hidden_units = 256
     output_keep_prob = 0.75
-    max_seq_len = 13
+    max_seq_len = 9  # 13
     recurrent_keep_prob = 1.0
     conv_keep_prob = 1.0
     n_classes = 2
-    features_per_particle = 13
-    embedding_dim = 13
-    attention = False
+    features_per_particle = 11  # 13
+    embedding_dim = features_per_particle
+    attention = True
     attention_dim = 256
+    proj_dim = 32
 
 class directories(object):
-    train = 'data/medium_train2.h5'
-    test = 'data/medium_test2.h5'
-    eval = 'data/small_eval.h5'
+    where = '/home/jtan/gpu/jtan/data'
+    train = os.path.join(where, 'p4_val.h5')
+    test = os.path.join(where, 'p4_test.h5')
+    eval = os.path.join(where ,'p4_val.h5')
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'

@@ -5,6 +5,7 @@ import glob, time, os
 
 from network import Network
 from data import Data
+from config import config_test
 
 class Model():
     def __init__(self, config, directories, features, labels, args, evaluate=False):
@@ -17,8 +18,9 @@ class Model():
             arch = Network.birnn
         elif args.architecture == 'simple_conv':
             arch = Network.sequence_conv2d
-        elif args.architecture == 'projection':
-            arch = Network.sequence_conv_projection
+        elif args.architecture == 'conv_projection':
+            print('Using conv-proj')
+            arch = Network.conv_projection
 
         self.global_step = tf.Variable(0, trainable=False)
         self.handle = tf.placeholder(tf.string, shape=[])
@@ -33,25 +35,28 @@ class Model():
         steps_per_epoch = int(self.features_placeholder.get_shape()[0])//config.batch_size
 
         train_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, config.batch_size)
-        test_dataset = Data.load_dataset(self.test_features_placeholder, self.test_labels_placeholder, config.batch_size, test=True)
+        test_dataset = Data.load_dataset(self.test_features_placeholder, self.test_labels_placeholder, config_test.batch_size, test=True)
+        val_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, config.batch_size, evaluate=True)
         self.iterator = tf.contrib.data.Iterator.from_string_handle(self.handle,
                                                                     train_dataset.output_types,
                                                                     train_dataset.output_shapes)
 
         self.train_iterator = train_dataset.make_initializable_iterator()
         self.test_iterator = test_dataset.make_initializable_iterator()
+        self.val_iterator = val_dataset.make_initializable_iterator()
 
         # embedding_encoder = tf.get_variable('embeddings', [config.features_per_particle, config.embedding_dim])
-        # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.ex_ids)
 
         self.example, self.labels = self.iterator.get_next()
 
         if evaluate:
+            # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
             self.logits = arch(self.example, config, self.training_phase)
             self.softmax, self.pred = tf.nn.softmax(self.logits)[:,1], tf.argmax(self.logits, 1)
             self.ema = tf.train.ExponentialMovingAverage(decay=config.ema_decay, num_updates=self.global_step)
             return
 
+        # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
 
         self.logits = arch(self.example, config, self.training_phase)
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)

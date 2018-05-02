@@ -8,6 +8,61 @@ from diagnostics import Diagnostics
 class Network(object):
 
     @staticmethod
+    def conv_projection(x, config, training, reuse=False, actv=tf.nn.relu):
+        print('Using convolutional architecture')
+        init = tf.contrib.layers.xavier_initializer()
+        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
+
+        # reshape outputs to [batch_size, max_time_steps, config.embedding_dim, 1]
+        max_time = config.max_seq_len  # tf.shape(x)[1]
+        cnn_inputs = tf.expand_dims(tf.reshape(x, [-1, max_time, config.embedding_dim]), -1)
+
+        # Convolution + max-pooling over n-particle windows
+        filter_sizes = [3,4,5]
+        n_filters = 128  # output dimensionality
+        feature_maps = list()
+
+        for filter_size in filter_sizes:
+            # Each kernel extracts a specific n-gram of particles
+            with tf.variable_scope('conv_proj2D-{}'.format(filter_size)) as scope:
+
+                fs = [filter_size, config.embedding_dim, 1, n_filters]
+                K = tf.get_variable('filter-{}'.format(filter_size), shape=fs, initializer=init)
+                b = tf.get_variable('bias-{}'.format(filter_size), shape=[n_filters], initializer=tf.constant_initializer(0.01))
+                W = tf.get_variable('proj-{}'.format(filter_size), shape=[max_time-filter_size+1, config.proj_dim], initializer=init)
+
+                conv_i = tf.nn.conv2d(cnn_inputs, filter=K, strides=[1,1,1,1], padding='VALID')
+                conv_i = actv(tf.nn.bias_add(conv_i, b))
+                conv_i = tf.layers.batch_normalization(conv_i, **kwargs)
+                print(conv_i.get_shape().as_list())
+
+                # Project 2nd dimension into embedding space
+                # [batch_size, J, 1, n_filters] (x) [J, embedding_dim] -> [batch_size, embedding_dim, 1, n_filters]
+                proj_i = tf.einsum('ijkl,jm->imkl', conv_i, W)
+
+                feature_maps.append(proj_i)
+
+        # Combine feature maps
+        print([fm.get_shape().as_list() for fm in feature_maps])
+        convs = tf.concat(feature_maps, axis=1)
+        print('before aggregated convolution:', convs.get_shape().as_list())
+
+        agg_conv_filters = [256,128]
+        convs = tf.layers.conv2d(convs, filters=agg_conv_filters[0], kernel_size=[3,1], kernel_initializer=init, activation=actv)
+        convs = tf.layers.batch_normalization(convs, **kwargs)
+        convs = tf.layers.conv2d(convs, filters=agg_conv_filters[1], kernel_size=[3,1], kernel_initializer=init, activation=actv)
+
+        print('after aggregated convolution:', convs.get_shape().as_list())
+        feature_vector = tf.contrib.layers.flatten(convs)
+        feature_vector = tf.layers.dropout(feature_vector, rate=1-config.conv_keep_prob, training=training)
+
+        # Fully connected layer for classification
+        with tf.variable_scope("fc"):
+            logits_CNN = tf.layers.dense(feature_vector, units=config.n_classes, kernel_initializer=init)
+
+        return logits_CNN
+
+    @staticmethod
     def birnn_dynamic(x, config, training, attention=False):
 
         print('Using recurrent architecture')
@@ -141,7 +196,7 @@ class Network(object):
         max_time = config.max_seq_len
         cnn_inputs = tf.expand_dims(tf.reshape(x, [-1, max_time, config.embedding_dim]), -1)
 
-        # Convolution + max-pooling over n-word windows
+        # Convolution + max-pooling over n-particle windows
         filter_sizes = [2,3,4,5]
         n_filters = 128  # output dimensionality
         feature_maps = list()
@@ -197,7 +252,7 @@ class Network(object):
         feature_maps = list()
 
         for filter_size in filter_sizes:
-            # Each kernel extracts a specific n-gram
+            # Each kernel extracts a specific n-gram of particles
             with tf.variable_scope('conv_pool2D-{}'.format(filter_size)) as scope:
 
                 fs = [filter_size, config.embedding_dim, 1, n_filters]
@@ -209,7 +264,7 @@ class Network(object):
 
                 # Max over-time pooling - final size [batch_size, 1, 1, n_filters]
                 # pool_i = tf.nn.max_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
-                pool_i = tf.nn.max_pool(conv_i, ksize=[1,filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
+                pool_i = tf.nn.max_pool(conv_i, ksize=[1,filter_size,1,1], strides=[1,1,1,1], padding='VALID')
 
                 # conv_i = tf.layers.conv2d(cnn_inputs, filters=n_filters, kernel_size=[filter_size, config.embedding_dim], 
                 #     padding='valid', use_bias=True, activation=actv, kernel_initializer=init)
@@ -236,3 +291,4 @@ class Network(object):
             logits_CNN = tf.layers.dense(feature_vector, units=config.n_classes, kernel_initializer=init)
         
         return logits_CNN
+

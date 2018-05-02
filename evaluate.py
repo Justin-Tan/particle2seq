@@ -35,7 +35,7 @@ def evaluate(config, args):
         # Initialize variables
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        train_handle = sess.run(cnn.train_iterator.string_handle())
+        val_handle = sess.run(cnn.val_iterator.string_handle())
 
         if args.restore_last and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
@@ -46,13 +46,13 @@ def evaluate(config, args):
                 new_saver.restore(sess, args.restore_path)
                 print('Previous checkpoint {} restored.'.format(args.restore_path))
 
-        sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder: eval_features,
+        sess.run(cnn.val_iterator.initializer, feed_dict={cnn.features_placeholder: eval_features,
             cnn.labels_placeholder: eval_labels})
 
         labels, probs, preds = list(), list(), list()
         while True:
             try:
-                eval_dict = {cnn.training_phase: False, cnn.handle: train_handle}
+                eval_dict = {cnn.training_phase: False, cnn.handle: val_handle}
                 y_true, y_prob, y_pred = sess.run([cnn.labels, cnn.softmax, cnn.pred], feed_dict=eval_dict)
                 probs.append(y_prob)
                 preds.append(y_pred)
@@ -68,8 +68,9 @@ def evaluate(config, args):
 
         eval_df['y_pred'] = y_pred
         eval_df['y_prob'] = y_prob
+        eval_df['y_true'] = y_true
 
-        eval_df.to_hdf('df_sequence_val_{}.h5'.format(args.architecture), key='df')
+        eval_df.to_hdf(os.path.join(directories.results, 'df_sequence_val_{}.h5'.format(args.architecture)), key='df')
 
         v_acc = np.equal(y_true, y_pred).mean()
         v_auc = roc_auc_score(y_true, y_prob)
