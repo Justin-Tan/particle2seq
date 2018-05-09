@@ -19,7 +19,6 @@ class Model():
         elif args.architecture == 'simple_conv':
             arch = Network.sequence_conv2d
         elif args.architecture == 'conv_projection':
-            print('Using conv-proj')
             arch = Network.conv_projection
 
         self.global_step = tf.Variable(0, trainable=False)
