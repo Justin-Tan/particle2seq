@@ -7,7 +7,7 @@ from sklearn.metrics import roc_auc_score
 
 # User-defined
 from network import Network
-from diagnostics import Diagnostics
+from utils import Utils
 from data import Data
 from model import Model
 from config import config_test, directories

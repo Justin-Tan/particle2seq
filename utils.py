@@ -6,7 +6,7 @@ import numpy as np
 import os, time
 from sklearn.metrics import f1_score
 
-class Diagnostics(object):
+class Utils(object):
     
     @staticmethod
     def soft_attention(inputs, attention_dim, feedforward=True):
@@ -149,3 +149,29 @@ class Diagnostics(object):
         print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Test F1: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_f1, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
 
         return v_auc_best
+
+    @staticmethod
+    def top_k_pool(x, k, axis, batch_size=None):
+        # Input: tensor x with shape 'NHWC'
+        
+        # Swap axis-to-pool with last
+        perm = np.arange(len(x.get_shape().as_list()))
+        perm[-1], perm[axis] = axis, perm[-1]
+        x = tf.transpose(x, perm)
+
+        in_shape = tf.shape(x)
+        last_dim = x.get_shape().as_list()[-1]
+        x_re = tf.reshape(x, [-1,last_dim])
+
+        values, indices = tf.nn.top_k(x_re, k=k, sorted=False)
+        out = []
+        vals = tf.unstack(values, axis=0)
+        inds = tf.unstack(indices-(last_dim-k), axis=0)
+        for i, idx in enumerate(inds):
+            out.append(tf.sparse_tensor_to_dense(tf.SparseTensor(tf.reshape(tf.cast(idx,tf.int64),[-1,1]), vals[i], [k]), validate_indices=False))
+        
+        x_out = tf.stack(out)
+        # shaped_out = tf.reshape(tf.stack(out), in_shape)
+        # x_out = tf.transpose(x_out, perm)
+        
+        return x_out

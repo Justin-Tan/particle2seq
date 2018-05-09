@@ -3,7 +3,8 @@
 import tensorflow as tf
 import numpy as np
 import glob, time, os
-from diagnostics import Diagnostics
+from utils import Utils
+import functools
 
 class Network(object):
 
@@ -63,41 +64,39 @@ class Network(object):
         return logits_CNN
 
     @staticmethod
-    def birnn_dynamic(x, config, training, attention=False):
+    def birnn_dynamic(x, config, training):
 
         print('Using recurrent architecture')
          # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
-        sequence_lengths = Diagnostics.length(rnn_inputs)
+        sequence_lengths = Utils.length(rnn_inputs)
         init = tf.contrib.layers.xavier_initializer()
 
          # Choose rnn cell type
         if config.rnn_cell == 'lstm':
-            args = {'num_units': config.hidden_units, 'forget_bias': 1.0, 'state_is_tuple': True}
-            base_cell = tf.nn.rnn_cell.LSTMCell
+            base_cell = functools.partial(tf.nn.rnn_cell.LSTMCell, num_units=config.rnn_hidden_units)
         elif config.rnn_cell == 'gru':
-            args = {'num_units': config.hidden_units}
-            base_cell = tf.nn.rnn_cell.GRUCell
+            base_cell = functools.partial(tf.nn.rnn_cell.GRUCell, num_units=config.rnn_hidden_units)
         elif config.rnn_cell == 'layer_norm':
-            args = {'num_units': config.hidden_units, 'forget_bias': 1.0, 'dropout_keep_prob': config.recurrent_keep_prob}
-            base_cell = tf.contrib.rnn.LayerNormBasicLSTMCell
+            base_cell = functools.partial(tf.contrib.rnn.LayerNormBasicLSTMCell, num_units=config.rnn_hidden_units,
+                dropout_keep_prob=config.recurrent_keep_prob)
+        else:
+            raise Exception('Invalid RNN cell specified.')
      
-        cell = base_cell
-
-        if config.output_keep_prob < 1:
+        if config.output_keep_prob < 1 and config.rnn_cell is not 'layer_norm':
             # rnn_inputs = tf.nn.dropout(rnn_inputs, self.keep_prob)
             fwd_cells = [tf.nn.rnn_cell.DropoutWrapper(
-                cell(**args), 
+                base_cell(), 
                 output_keep_prob=config.output_keep_prob,
                 variational_recurrent=True, dtype=tf.float32) for _ in range(config.rnn_layers)]
             bwd_cells = [tf.nn.rnn_cell.DropoutWrapper(
-                cell(**args),
+                base_cell(),
                 output_keep_prob=config.output_keep_prob,
                 variational_recurrent=True, dtype=tf.float32) for _ in range(config.rnn_layers)]
         else:
-            fwd_cells = [cell(**args) for _ in range(config.rnn_layers)]
-            bwd_cells = [cell(**args) for _ in range(config.rnn_layers)]
+            fwd_cells = [base_cell() for _ in range(config.rnn_layers)]
+            bwd_cells = [base_cell() for _ in range(config.rnn_layers)]
 
         fwd_cells = tf.contrib.rnn.MultiRNNCell(fwd_cells)
         bwd_cells = tf.contrib.rnn.MultiRNNCell(bwd_cells)
@@ -112,10 +111,10 @@ class Network(object):
 
         birnn_output = tf.concat(outputs,2)
 
-        if attention:  # invoke soft attention mechanism - attend to different particles
-            summary_vector = attention(birnn_output, config.attention_dim, custom=False)
+        if config.attention:  # invoke soft attention mechanism - attend to different particles
+            summary_vector = Utils.soft_attention(birnn_output, config.attention_dim)
         else:  # Select last relevant output
-            summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
+            summary_vector = Utils.last_relevant(birnn_output, sequence_lengths)
         
         print(summary_vector.get_shape().as_list())
         # Fully connected layer for classification
@@ -131,7 +130,7 @@ class Network(object):
         # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
-        sequence_lengths = Diagnostics.length(rnn_inputs)
+        sequence_lengths = Utils.length(rnn_inputs)
         init = tf.contrib.layers.xavier_initializer()
 
          # Choose rnn cell type
@@ -170,14 +169,14 @@ class Network(object):
             parallel_iterations=128)
 
         if config.attention:  # invoke soft attention mechanism - attend to different particles
-            summary_vector = Diagnostics.soft_attention(birnn_output, config.attention_dim)
+            summary_vector = Utils.soft_attention(birnn_output, config.attention_dim)
         else:  # Select last relevant output
-            summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
+            summary_vector = Utils.last_relevant(birnn_output, sequence_lengths)
             print('Summarizing vector shape:', summary_vector.get_shape().as_list())
 
         # Fully connected layer for classification
         with tf.variable_scope("fc"):
-            W_fc = tf.get_variable('W_fc', shape=[2*config.hidden_units, 2], initializer=init)
+            W_fc = tf.get_variable('W_fc', shape=[2*config.rnn_hidden_units, 2], initializer=init)
             b_fc = tf.get_variable('b_fc', shape=[2], initializer=tf.constant_initializer(0.01))
             logits_RNN = tf.matmul(summary_vector, W_fc) + b_fc
 

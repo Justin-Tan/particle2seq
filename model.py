@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import tensorflow as tf
 import numpy as np
-import glob, time, os
+import glob, time, os, functools
 
 from network import Network
 from data import Data
@@ -15,11 +15,10 @@ class Model():
         if args.architecture == 'deep_conv':
             arch = Network.sequence_deep_conv
         elif args.architecture == 'recurrent':
-            arch = Network.birnn
+            arch = Network.birnn_dynamic
         elif args.architecture == 'simple_conv':
             arch = Network.sequence_conv2d
         elif args.architecture == 'conv_projection':
-            print('Using conv-proj')
             arch = Network.conv_projection
 
         self.global_step = tf.Variable(0, trainable=False)

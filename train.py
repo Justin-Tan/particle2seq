@@ -7,7 +7,7 @@ import argparse
 
 # User-defined
 from network import Network
-from diagnostics import Diagnostics
+from utils import Utils
 from data import Data
 from model import Model
 from config import config_train, directories
@@ -53,7 +53,7 @@ def train(config, args):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
             # Run diagnostics
-            v_auc_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
 
             while True:

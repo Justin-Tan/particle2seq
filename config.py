@@ -13,7 +13,7 @@ class config_train(object):
     rnn_layers = 2
     embedding_dim = 128
     rnn_cell = 'gru'
-    hidden_units = 256
+    rnn_hidden_units = 256
     output_keep_prob = 0.75
     max_seq_len = 9
     recurrent_keep_prob = 0.8
@@ -37,7 +37,7 @@ class config_test(object):
     rnn_layers = 2
     embedding_dim = 128
     rnn_cell = 'gru'
-    hidden_units = 256
+    rnn_hidden_units = 256
     output_keep_prob = 0.75
     max_seq_len = 9  # 13
     recurrent_keep_prob = 1.0
