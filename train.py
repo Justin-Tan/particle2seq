@@ -7,7 +7,7 @@ import argparse
 
 # User-defined
 from network import Network
-from diagnostics import Diagnostics
+from utils import Utils
 from data import Data
 from model import Model
 from config import config_train, directories
@@ -52,8 +52,8 @@ def train(config, args):
         for epoch in range(config.num_epochs):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
-            # Run diagnostics
-            v_auc_best = Diagnostics.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+            # Run utils
+            v_auc_best = Utils.run_utils(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
 
             while True:
@@ -62,6 +62,11 @@ def train(config, args):
                     global_step, *ops = sess.run([cnn.global_step, cnn.train_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True,
                         cnn.handle: train_handle})
                     
+                    if global_step % 10000 == 0:
+                        # Run utils
+                        v_auc_best = Utils.run_utils(cnn, config_train, directories, sess, saver, train_handle,
+                            test_handle, start_time, v_auc_best, epoch, args.name)
+
                 except tf.errors.OutOfRangeError:
                     print('End of epoch!')
                     break
@@ -84,7 +89,8 @@ def main(**kwargs):
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
     parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
-    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture")
+    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
+        choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection')))
     args = parser.parse_args()
     config = config_train
 

@@ -3,7 +3,7 @@
 import tensorflow as tf
 import numpy as np
 import glob, time, os
-from diagnostics import Diagnostics
+from utils import Utils
 
 class Network(object):
 
@@ -69,7 +69,7 @@ class Network(object):
          # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
-        sequence_lengths = Diagnostics.length(rnn_inputs)
+        sequence_lengths = Utils.length(rnn_inputs)
         init = tf.contrib.layers.xavier_initializer()
 
          # Choose rnn cell type
@@ -115,7 +115,7 @@ class Network(object):
         if attention:  # invoke soft attention mechanism - attend to different particles
             summary_vector = attention(birnn_output, config.attention_dim, custom=False)
         else:  # Select last relevant output
-            summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
+            summary_vector = Utils.last_relevant(birnn_output, sequence_lengths)
         
         print(summary_vector.get_shape().as_list())
         # Fully connected layer for classification
@@ -131,7 +131,7 @@ class Network(object):
         # reshape outputs to [batch_size, max_time_steps, n_features]
         max_time = config.max_seq_len
         rnn_inputs = tf.reshape(x, [-1, max_time, config.embedding_dim])
-        sequence_lengths = Diagnostics.length(rnn_inputs)
+        sequence_lengths = Utils.length(rnn_inputs)
         init = tf.contrib.layers.xavier_initializer()
 
          # Choose rnn cell type
@@ -170,9 +170,9 @@ class Network(object):
             parallel_iterations=128)
 
         if config.attention:  # invoke soft attention mechanism - attend to different particles
-            summary_vector = Diagnostics.soft_attention(birnn_output, config.attention_dim)
+            summary_vector = Utils.soft_attention(birnn_output, config.attention_dim)
         else:  # Select last relevant output
-            summary_vector = Diagnostics.last_relevant(birnn_output, sequence_lengths)
+            summary_vector = Utils.last_relevant(birnn_output, sequence_lengths)
             print('Summarizing vector shape:', summary_vector.get_shape().as_list())
 
         # Fully connected layer for classification

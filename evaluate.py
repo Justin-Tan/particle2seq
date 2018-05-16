@@ -7,7 +7,7 @@ from sklearn.metrics import roc_auc_score
 
 # User-defined
 from network import Network
-from diagnostics import Diagnostics
+from utils import Utils
 from data import Data
 from model import Model
 from config import config_test, directories
@@ -21,7 +21,7 @@ def evaluate(config, args):
     assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
     
     print('Reading data...')
-    eval_df, eval_features, eval_labels = Data.load_data(directories.val, evaluate=True)
+    eval_df, eval_features, eval_labels = Data.load_data(args.input, evaluate=True)
     config.max_seq_len = int(eval_features.shape[1]/config.features_per_particle)
 
     # Build graph
@@ -59,7 +59,7 @@ def evaluate(config, args):
                 labels.append(y_true)
 
             except tf.errors.OutOfRangeError:
-                print('End of evaluation. Elapsed time: {:.2f}'.format(time.time()-start))
+                print('End of evaluation. Elapsed time: {:.2f} s'.format(time.time()-start))
                 break
 
         y_prob = np.hstack(probs)
@@ -70,10 +70,16 @@ def evaluate(config, args):
         eval_df['y_prob'] = y_prob
         eval_df['y_true'] = y_true
 
-        eval_df.to_hdf(os.path.join(directories.results, 'df_sequence_val_{}.h5'.format(args.architecture)), key='df')
-
         v_acc = np.equal(y_true, y_pred).mean()
         v_auc = roc_auc_score(y_true, y_prob)
+
+        out = os.path.basename(os.path.splitext(args.input)[0])
+        print('Running over {} with signal/background ratio {:.3f}'.format(out, y_true.mean()))
+        h5_out = os.path.join(directories.results, '{}_{}_results.h5'.format(out, args.architecture))
+        eval_df.to_hdf(h5_out, key='df')
+        print('Saved to', h5_out)
+        Utils.plot_ROC_curve(eval_df['y_true'], eval_df['y_prob'], 
+                meta=r'$b \rightarrow s \gamma$' + ' Channel {}'.format(int(eval_df['ewp_channel'].head().mean())), out=out)
 
         print("Validation accuracy: {:.3f}".format(v_acc))
         print("Validation AUC: {:.3f}".format(v_auc))
@@ -83,10 +89,11 @@ def evaluate(config, args):
 
 def main(**kwargs):
     parser = argparse.ArgumentParser()
-#   parser.add_argument("-i", "--input", help="path to test dataset in h5 format")
+    parser.add_argument("-i", "--input", help="path to evaluation dataset in h5 format")
     parser.add_argument("-rl", "--restore_last", help="restore last saved model", action="store_true")
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
-    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture")
+    parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
+        choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection')))
     args = parser.parse_args()
 
     # Evaluate
