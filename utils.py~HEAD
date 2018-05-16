@@ -6,7 +6,7 @@ import numpy as np
 import os, time
 from sklearn.metrics import f1_score
 
-class Diagnostics(object):
+class Utils(object):
     
     @staticmethod
     def soft_attention(inputs, attention_dim, feedforward=True):
