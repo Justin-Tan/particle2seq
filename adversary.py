@@ -1,12 +1,28 @@
-""" Network wiring """
+""" Adversarial training for robustness against systematic error """
 
 import tensorflow as tf
 import numpy as np
 import glob, time, os
 from utils import Utils
 import functools
+from config import directories
 
-class Network(object):
+class Adversary(object):
+    def __init__(self, config, logits, auxillary_variables, args, evaluate=False):
+        # Add ops to the graph for adversarial training
+
+        for i, pivot in enumerate(config.pivots):
+            print('Building adversarial network for', pivot)
+
+            self.adversary_loss = tf.reduce_mean(tf.cast((1-self.label), 
+                tf.float32)*tf.nn.sparse_softmax_cross_entropy_with_logits(logits=adversary_readout,
+                    labels=tf.cast(self.ancillary[:,i+2], tf.int32)))
+            tf.add_to_collection('adversary_losses', self.adversary_loss)
+
+    
+
+
+
 
     @staticmethod
     def conv_projection(x, config, training, reuse=False, actv=tf.nn.relu):
