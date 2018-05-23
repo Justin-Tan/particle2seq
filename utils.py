@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.python.client import device_lib
 import numpy as np
 import os, time
+import selu
 from sklearn.metrics import f1_score
 
 class Utils(object):
@@ -91,6 +92,52 @@ class Utils(object):
         return output
 
     @staticmethod
+    def selu_layer(x, shape, name, keep_prob, training=True):
+        init = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_IN')
+
+        with tf.variable_scope(name) as scope:
+            W = tf.get_variable("weights", shape = shape, initializer=init)
+            b = tf.get_variable("biases", shape = [shape[1]], initializer=tf.random_normal_initializer(stddev=0.01))
+            actv = selu.selu(tf.add(tf.matmul(x, W), b))
+            out = selu.dropout_selu(actv, rate=1-keep_prob, training=training)
+
+        return out
+
+    @staticmethod
+    def dense_layer(x, shape, name, keep_prob, training=True, actv=tf.nn.elu):
+        init=tf.contrib.layers.xavier_initializer()
+        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': True}
+
+        with tf.variable_scope(name, initializer=init) as scope:
+            layer = tf.layers.dense(x, units=shape[1], activation=actv)
+            bn = tf.layers.batch_normalization(layer, **kwargs)
+            out = tf.layers.dropout(bn, 1-keep_prob, training=training)
+
+        return out
+
+    @staticmethod
+    def dense_network(x, n_layers, hidden_nodes, keep_prob, n_input, n_classes, scope, layer, actv=tf.nn.elu, reuse=False, training=True):
+
+        SELU_initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_IN')
+        init = SELU_initializer if layer is selu_layer else tf.contrib.layers.xavier_initializer()
+        assert n_layers == len(hidden_nodes), 'Specified layer nodes and number of layers do not correspond.'
+        layers = [x]
+
+        with tf.variable_scope(scope, reuse=reuse):
+            hidden_0 = layer(x, shape=[n_input, hidden_nodes[0]], name='hidden0',
+                                    keep_prob = keep_prob, training=training)
+            layers.append(hidden_0)
+            for n in range(0,n_layers-1):
+                hidden_n = layer(layers[-1], shape=[hidden_nodes[n], hidden_layer_nodes[n+1]], name='hidden{}'.format(n+1),
+                                    keep_prob=keep_prob, training=training, actv=actv)
+                layers.append(hidden_n)
+
+            logits = tf.layers.dense(hidden_n, units=n_classes, kernel_initializer=init)
+
+        return logits
+
+
+    @staticmethod
     def length(sequence):
         used = tf.sign(tf.reduce_max(tf.abs(sequence), 2))
         length = tf.reduce_sum(used, 1)
@@ -113,6 +160,11 @@ class Utils(object):
         #return local_device_protos
         print('Available GPUs:')
         print([x.name for x in local_device_protos if x.device_type == 'GPU'])
+
+    @staticmethod
+    def scope_variables(name):
+        with tf.variable_scope(name):
+            return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=tf.get_variable_scope().name)
 
     @staticmethod
     def run_diagnostics(model, config, directories, sess, saver, train_handle,

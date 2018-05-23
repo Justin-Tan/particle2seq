@@ -57,7 +57,8 @@ class Model():
 
         # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
 
-        self.logits = arch(self.example, config, self.training_phase)
+        with tf.variable_scope('classifier') as scope:
+            self.logits = arch(self.example, config, self.training_phase)
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)

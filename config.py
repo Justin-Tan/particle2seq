@@ -8,7 +8,6 @@ class config_train(object):
     ema_decay = 0.999
     learning_rate = 1e-4
     momentum = 0.9
-    vocab_size = 1200
     rnn_layers = 3
     embedding_dim = 128
     rnn_cell = 'gru'
@@ -24,7 +23,19 @@ class config_train(object):
     attention_dim = 256
     proj_dim = 32
     add_skip_connections = True
+
+    # Adversary hyperparameters
+    use_adversary = True
     pivots = ['deltaE', 'Mbc']
+    adv_n_layers = 4
+    adv_keep_prob = 1.0
+    adv_hidden_nodes = [256,512,512,256]
+    adv_learning_rate = 1e-3
+    adv_lambda = 8
+    adv_iterations = 4
+    K = adv_iterations
+    adv_n_classes = 10  # number of bins for discretized predictions
+
 
 class config_test(object):
     mode = 'alpha'
@@ -34,7 +45,6 @@ class config_test(object):
     ema_decay = 0.999
     learning_rate = 1e-4
     momentum = 0.9
-    vocab_size = 1200
     rnn_layers = 3
     embedding_dim = 128
     rnn_cell = 'gru'
