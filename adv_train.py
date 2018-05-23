@@ -1,4 +1,8 @@
 #!/usr/bin/python3
+
+# Script for adversarial training procedure
+# See arXiv 1611.01046
+
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -16,17 +20,18 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 def train(config, args):
 
+    assert(config.use_adversary), 'use_adversary must be set to True in the configuration file'
     start_time = time.time()
-    global_step, n_checkpoints, v_auc_best = 0, 0, 0.
+    joint_step, n_checkpoints, v_auc_best = 0, 0, 0.
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     print('Reading data ...')
-    features, labels = Data.load_data(directories.train)
-    test_features, test_labels = Data.load_data(directories.test)
+    features, labels, pivots = Data.load_data(directories.train), adversary=True)
+    test_features, test_labels, test_pivots = Data.load_data(directories.test, adversary=True)
     config.max_seq_len = int(features.shape[1]/config.features_per_particle)
 
     # Build graph
-    cnn = Model(config, features=features, labels=labels, args=args)
+    cnn = Model(config, directories, features=features, labels=labels, args=args)
     saver = tf.train.Saver()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
@@ -55,16 +60,18 @@ def train(config, args):
             # Run utils
             v_auc_best = Utils.run_utils(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
-
+            train_feed = {cnn.training_phase: True, cnn.handle: train_handle}
             while True:
                 try:
-                    # Update weights
-                    global_step, *ops = sess.run([cnn.global_step, cnn.train_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True,
-                        cnn.handle: train_handle})
-                    
-                    if global_step % 10000 == 0:
+                    # Train adversary for K iterations relative to predictive model
+                    if joint_step % config.K == 0:
+                        joint_step, *ops = sess.run([cnn.joint_step, cnn.joint_train_op, cnn.update_accuracy], train_feed)
+                    else:
+                        sess.run([cnn.adversary_train_op], train_feed)
+
+                    if joint_step % 12500 == 0:
                         # Run utils
-                        v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+                        v_auc_best = Utils.run_adv_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                             test_handle, start_time, v_auc_best, epoch, args.name)
 
                 except tf.errors.OutOfRangeError:
@@ -73,12 +80,12 @@ def train(config, args):
 
                 except KeyboardInterrupt:
                     save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                        'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
+                        'p2seq_adv_{}_last.ckpt'.format(args.name)), global_step=epoch)
                     print('Interrupted, model saved to: ', save_path)
                     sys.exit()
 
         save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                               'p2seq_{}_end.ckpt'.format(args.name)),
+                               'p2seq_adv_{}_end.ckpt'.format(args.name)),
                                global_step=epoch)
 
     print("Training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
@@ -88,7 +95,7 @@ def main(**kwargs):
     parser.add_argument("-rl", "--restore_last", help="restore last saved model", action="store_true")
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
-    parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
+    parser.add_argument("-n", "--name", default="p2seq_adv", help="Checkpoint/Tensorboard label")
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
         choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection')))
     args = parser.parse_args()

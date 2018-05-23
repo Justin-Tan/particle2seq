@@ -176,7 +176,8 @@ class Utils(object):
         feed_dict_test = {model.training_phase: False, model.handle: test_handle}
 
         try:
-            t_auc, t_acc, t_loss, t_summary = sess.run([model.auc_op, model.accuracy, model.cost, model.merge_op], feed_dict=feed_dict_train)
+            t_auc, t_acc, t_loss, t_summary = sess.run([model.auc_op, model.accuracy, model.cost, model.merge_op], 
+                feed_dict=feed_dict_train)
             model.train_writer.add_summary(t_summary)
         except tf.errors.OutOfRangeError:
             t_auc, t_loss, t_acc = float('nan'), float('nan'), float('nan')
@@ -192,15 +193,49 @@ class Utils(object):
                 save_path = saver.save(sess,
                             os.path.join(directories.checkpoints_best, 'conv_{}_epoch{}.ckpt'.format(name, epoch)),
                             global_step=epoch)
-                print('Graph saved to file: {}'.format(save_path))
+                print('Weights saved to file: {}'.format(save_path))
 
         if epoch % 10 == 0 and epoch>10:
             save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
-            print('Graph saved to file: {}'.format(save_path))
+            print('Weights saved to file: {}'.format(save_path))
 
         print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Test F1: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_f1, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
 
         return v_auc_best
+
+    @staticmethod
+    def run_adv_diagnostics(model, config, directories, sess, saver, train_handle,
+            test_handle, start_time, v_auc_best, epoch, name):
+        t0 = time.time()
+        improved = ''
+        sess.run(tf.local_variables_initializer())
+        feed_dict_train = {model.training_phase: False, model.handle: train_handle}
+        feed_dict_test = {model.training_phase: False, model.handle: test_handle}
+
+        t_acc, t_loss, t_auc, t_summary = sess.run([model.accuracy, model.cross_entropy, model.auc_op, model.merge_op],
+                                            feed_dict = feed_dict_train)
+        v_ops = [model.accuracy, model.cross_entropy, model.adv_loss, model.auc_op, model.total_loss, model.merge_op]
+        v_acc, v_loss, v_adv_loss, v_auc, v_total, v_summary = sess.run(v_ops, feed_dict=feed_dict_test)
+        model.train_writer.add_summary(t_summary)
+        model.test_writer.add_summary(v_summary)
+
+        if v_auc > v_auc_best:
+            v_auc_best = v_auc
+            improved = '[*]'
+            if epoch>5:
+                save_path = saver.save(sess,
+                            os.path.join(directories.checkpoints_best, 'conv_{}_epoch{}.ckpt'.format(name, epoch)),
+                            global_step=epoch)
+                print('Weights saved to file: {}'.format(save_path))
+
+        if epoch % 10 == 0 and epoch > 10:
+            save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
+            print('Weights saved to file: {}'.format(save_path))
+
+        print('Epoch {}, Step {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} |\n \\
+        Adversarial loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, step, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+
+    return epoch, v_auc_best
 
     @staticmethod
     def top_k_pool(x, k, axis, batch_size=None):
