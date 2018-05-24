@@ -36,16 +36,20 @@ class Model():
 
         if config.use_adversary:
             self.pivots_placeholder = tf.placeholder(tf.float32)
+            self.pivot_labels_placeholder = tf.placeholder(tf.int32)
             self.test_pivots_placeholder = tf.placeholder(tf.float32)
+            self.test_pivot_labels_placeholder = tf.placeholder(tf.int32)
+
             train_dataset = Data.load_dataset_adversary(self.features_placeholder, self.labels_placeholder, 
-                self.pivots_placeholder, config.batch_size)
+                self.pivots_placeholder, self.pivot_labels_placeholder, config.batch_size)
             test_dataset = Data.load_dataset_adversary(self.test_features_placeholder, self.test_labels_placeholder, 
-                self.pivots_placeholder, config_test.batch_size, test=True)
+                self.test_pivots_placeholder, self.test_pivot_labels_placeholder, config_test.batch_size, test=True)
         else:
             train_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, 
                 config.batch_size)
             test_dataset = Data.load_dataset(self.test_features_placeholder, self.test_labels_placeholder, 
                 config_test.batch_size, test=True)
+
         val_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, config.batch_size, evaluate=True)
         self.iterator = tf.contrib.data.Iterator.from_string_handle(self.handle,
                                                                     train_dataset.output_types,
@@ -57,7 +61,11 @@ class Model():
 
         # embedding_encoder = tf.get_variable('embeddings', [config.features_per_particle, config.embedding_dim])
 
-        self.example, self.labels = self.iterator.get_next()
+        self.example, *self.labels = self.iterator.get_next()
+
+        if config.use_adversary:
+            self.labels, self.pivots, self.pivot_labels, = self.labels
+            print(self.pivots.get_shape())
 
         if evaluate:
             # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
@@ -77,7 +85,7 @@ class Model():
             adv = Adversary(config,
                 classifier_logits=self.logits,
                 labels=self.labels,
-                auxillary_variables=self.aux,
+                auxillary_variables=self.pivots,
                 training_phase=self.training_phase,
                 args=args)
 
@@ -124,7 +132,7 @@ class Model():
 
         tf.summary.scalar('accuracy', self.accuracy)
         tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('cost', self.cost)
+        tf.summary.scalar('Dcost', self.cost)
         tf.summary.scalar('auc', self.auc_op)
         self.merge_op = tf.summary.merge_all()
 

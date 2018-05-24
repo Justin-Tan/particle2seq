@@ -235,7 +235,7 @@ class Utils(object):
         print('Epoch {}, Step {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} |\n \\
         Adversarial loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, step, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
 
-    return epoch, v_auc_best
+    return v_auc_best
 
     @staticmethod
     def top_k_pool(x, k, axis, batch_size=None):
@@ -262,3 +262,70 @@ class Utils(object):
         # x_out = tf.transpose(x_out, perm)
         
         return x_out
+
+        @staticmethod
+        def plot_distributions(model, epoch, sess, handle, nbins=64, notebook=False):
+
+            import matplotlib as mpl
+            import matplotlib.pyplot as plt
+            import numpy as np
+            import pandas as pd
+            import seaborn as sns
+            plt.style.use('seaborn-darkgrid')
+            plt.style.use('seaborn-talk')
+            feed_dict = {model.training_phase: False, model.handle: handle}
+
+            pivots, labels, predictions, softmax = sess.run([model.pivots, model.labels, model.pred, model.softmax], feed_dict=feed_dict)
+            assert pivots.shape[0] == labels.shape[0], 'Shape mismatch along batch dimension.'
+            df_z = pd.DataFrame({'mbc': pivots[:,0]})
+            df_z = df_z.assign(labels=label, predictions=predictions, signal_prob=softmax[:,1])
+
+            def normPlot(variable, pdf, epoch, signal, nbins=50, bkg_rejection=0.995):
+                titles={'mbc': r'$M_{bc}$ (GeV)', 'deltae': r'$\Delta E$ (GeV)', 'daughterInvM': r'$M_{X_q}$ (GeV)'}
+                bkg = pdf[pdf['labels']<0.5]
+                post_bkg = bkg.nlargest(int(bkg.shape[0]*(1-bkg_rejection)), columns=['signal_prob'])
+                threshold = post_bkg['signal_prob'].min()
+                print('Post-selection:', post_bkg.shape[0])
+                sns.distplot(post_bkg[variable], hist=True, kde=True, label='Background - {} rejection'.format(bkg_rejection), bins=nbins)
+                sns.distplot(bkg[variable], hist=True, kde=True, label='Background', bins=nbins)
+                if signal:
+                    sig = pdf[pdf['labels']>0.5]
+                    post_sig = pdf[(pdf['labels']==1) & (pdf['preds']>threshold)]
+                    sns.distplot(post_sig[variable], hist=True, kde=True, label='Signal post-cut', bins=nbins)
+                    sns.distplot(sig[variable], hist=True, kde=True, label='Signal', bins=nbins)
+                plt.xlabel(r'{}'.format(titles[variable]))
+                plt.ylabel(r'Normalized events/bin')
+                plt.legend(loc = "best")
+                if notebook:
+                    plt.show()
+                else:
+                    plt.savefig('graphs/{}_dist_adv-ep{}.pdf'.format(variable, epoch), bbox_inches='tight',format='pdf', dpi=1000)
+                plt.gcf().clear()
+
+            def binscatter(variable, x, y, nbins=69):
+                titles={'mbc': r'$M_{bc}$ (GeV)', 'deltae': r'$\Delta E$ (GeV)', 'daughterInvM': r'$M_{X_q}$ (GeV)'}
+                n,_ = np.histogram(x, nbins)
+                sy, _ = np.histogram(x, bins=nbins, weights=y)
+                sy2, _ = np.histogram(x, bins=nbins, weights=y*y)
+                mean = sy / n
+                std = np.sqrt(np.square(sy2/n - mean*mean))/4
+                bins = (_[1:] + _[:-1])/2
+                plt.errorbar(bins, mean, yerr=std, fmt='ro', label='Traditional NN', markersize=6, alpha=0.8)
+                plt.xlabel(r'{}'.format(titles[variable]))
+                plt.ylabel('NN Posterior')
+                plt.legend(loc='best')
+                # sns.regplot(bins,mean,order=1, marker='.',color='r')
+                if notebook:
+                    plt.show()
+                else:
+                    plt.savefig('graphs/{}_adv-ep{}.pdf'.format(variable, epoch), bbox_inches='tight',format='pdf', dpi=1000)
+                plt.gcf().clear()
+
+            normPlot('mbc', df_z, epoch=epoch, signal=False)
+            normPlot('mbc', df_z, epoch=epoch, signal=True)
+
+            # normPlot('deltae', df_z, epoch=epoch, signal=False)
+            df_sig = df_z[df_z['labels']>0.5]
+            df_bkg = df_z[df_z['labels']<0.5]
+            binscatter('mbc', df_bkg['mbc'], df_bkg['preds'])
+            # binscatter('deltae', df_bkg['deltae'], df_bkg['preds'])

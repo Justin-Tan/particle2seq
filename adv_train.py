@@ -26,8 +26,8 @@ def train(config, args):
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     print('Reading data ...')
-    features, labels, pivots = Data.load_data(directories.train), adversary=True)
-    test_features, test_labels, test_pivots = Data.load_data(directories.test, adversary=True)
+    features, labels, pivots, pivot_labels = Data.load_data(directories.train), adversary=True)
+    test_features, test_labels, test_pivots, test_pivot_labels = Data.load_data(directories.test, adversary=True)
     config.max_seq_len = int(features.shape[1]/config.features_per_particle)
 
     # Build graph
@@ -69,8 +69,7 @@ def train(config, args):
                     else:
                         sess.run([cnn.adversary_train_op], train_feed)
 
-                    if joint_step % 12500 == 0:
-                        # Run utils
+                    if joint_step % 12500 == 0:  # Run diagnostics
                         v_auc_best = Utils.run_adv_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                             test_handle, start_time, v_auc_best, epoch, args.name)
 

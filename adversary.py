@@ -8,7 +8,7 @@ import functools
 from config import directories
 
 class Adversary(object):
-    def __init__(self, config, classifier_logits, labels, auxillary_variables, args, training_phase, evaluate=False):
+    def __init__(self, config, classifier_logits, labels, pivots, pivot_labels, args, training_phase, evaluate=False):
         # Add ops to the graph for adversarial training
         
         adversary_losses_dict = {}
@@ -32,9 +32,10 @@ class Adversary(object):
                     actv=tf.nn.elu,  # try tanh, relu, selu
                     scope='adversary_{}_{}'.format(pivot, mode))
 
+            # Mask loss for signal events
             adversary_loss = tf.reduce_mean(tf.cast((1-labels), 
                 tf.float32)*tf.nn.sparse_softmax_cross_entropy_with_logits(logits=adversary_logits,
-                    labels=tf.cast(self.ancillary[:,i+2], tf.int32)))
+                    labels=tf.cast(pivot_labels[:,i], tf.int32)))
 
             adversary_losses_dict[pivot] = adversary_loss
             adversary_logits_dict[pivot] = adversary_logits
@@ -70,10 +71,18 @@ class Adversary(object):
         with tf.control_dependencies([self.predictor_train_op]):
             self.joint_train_op = tf.group(maintain_predictor_averages_op)
 
+        classifier_pred = tf.argmax(self.logits, 1)
+        true_background = tf.boolean_mask(pivots, (1-labels))
+        pred_background = tf.boolean_mask(pivots, (1-classifier_pred))
+
         tf.summary.scalar('adversary_loss', self.adversary_combined_loss)
         tf.summary.scalar('total_loss', self.total_loss)
 
-        for pivot in adversary_logits_dict.keys():
-            adv_correct_prediction = tf.equal(tf.cast(tf.argmax(adversary_logits_dict[pivot],1), tf.int32), tf.cast(self.ancillary[:,3], tf.int32))
+        for i, pivot in enumerate(config.pivots):
+            adv_correct_prediction = tf.equal(tf.cast(tf.argmax(adversary_logits_dict[pivot],1), tf.int32), 
+                tf.cast(pivot_labels[:,i], tf.int32))
             adv_accuracy = tf.reduce_mean(tf.cast(adv_correct_prediction, tf.float32))
             tf.summary.scalar('adversary_acc_{}'.format(pivot), adv_accuracy)
+            tf.summary.histogram('true_{}_background_distribution'.format(pivot), true_background[:,i])
+            tf.summary.histogram('pred_{}_background_distribution'.format(pivot), pred_background[:,i])
+

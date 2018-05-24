@@ -26,7 +26,7 @@ class config_train(object):
 
     # Adversary hyperparameters
     use_adversary = True
-    pivots = ['deltaE', 'Mbc']
+    pivots = ['Mbc']  # or ['Mbc', 'deltaE']
     adv_n_layers = 4
     adv_keep_prob = 1.0
     adv_hidden_nodes = [256,512,512,256]
@@ -41,7 +41,7 @@ class config_test(object):
     mode = 'alpha'
     n_layers = 5
     num_epochs = 512
-    batch_size = 128
+    batch_size = 4096
     ema_decay = 0.999
     learning_rate = 1e-4
     momentum = 0.9

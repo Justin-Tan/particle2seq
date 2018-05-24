@@ -4,16 +4,17 @@ A sequence modelling approach to event classification in particle physics, which
 
 -----------------------------
 ## Usage
-The code depends on [Tensorflow](https://www.tensorflow.org/)
+The code depends on [Tensorflow 1.8](https://github.com/tensorflow/tensorflow)
 ```
 # Check command line arguments
 $ python3 train.py -h
 # Run
 $ python3 train.py -opt momentum --name my_network
 ```
+To enable adversarial training mode based on a variant of the method proposed in [Louppe et. al.](https://arxiv.org/abs/1611.01046), use `adv_train.py` in place of `train.py` and enable `use_adverary = True` in the `config` file. 
 
 ## Extensions
-The network architecture is kept modular from the remainder of the computational graph. To swap out the network for your custom one, create a `@staticmethod` under the `Network` class in `network.py`:
+The network architecture is kept modular from the remainder of the computational graph. For ease of experimentation, the codebase will support any arbitrary architecture that yields logits in the context of binary classification. In addition, the adversarial training procedure can interface with any arbitrary network architecture. To swap out the network for your custom one, create a `@staticmethod` under the `Network` class in `network.py`:
 
 ```python
 @staticmethod
@@ -38,6 +39,9 @@ class Model():
         arch = Network.my_network
         # Define the computational graph
 ```
+### Monitoring / checkpoints
+Tensorboard summaries are written periodically to `tensorboard/` and checkpoints are saved every 10 epochs.
+
 ## Results
 Experiments run over 1 ab<sup>-1</sup> of simulated Belle II data with signal events defined as rare electroweak penguin decays and obscured by standard background processes.
 
@@ -49,11 +53,12 @@ graph showing convergence on high-multiplicity decay chain vs. standard dense ne
 ### Dependencies
 * Python 3.6
 * [Pandas](https://pandas.pydata.org/)
-* [TensorFlow 1.7](https://www.tensorflow.org/)
+* [TensorFlow 1.8](https://github.com/tensorflow/tensorflow)
 
 ### Resources
 * [Convolutional/recurrent networks for sequence modelling](https://arxiv.org/pdf/1803.01271.pdf)
 * [Convolutional seq2seq learning](https://arxiv.org/pdf/1705.03122.pdf)
+* [Learning to pivot with adversarial networks](https://arxiv.org/abs/1611.01046)
 
 ### Future Work
 * Add embedding layer
@@ -61,4 +66,4 @@ graph showing convergence on high-multiplicity decay chain vs. standard dense ne
 * Port to Pytorch
 
 ### Contact
-Feel free to contact me at [justin.tan@coepp.org.au](mailto:justin.tan@coepp.org.au) for access to the dataset or questions about the model.
+Feel free to open an issue or contact me at [justin.tan@coepp.org.au](mailto:justin.tan@coepp.org.au) for access to the dataset or questions about the model.
