@@ -61,11 +61,11 @@ class Model():
 
         # embedding_encoder = tf.get_variable('embeddings', [config.features_per_particle, config.embedding_dim])
 
-        self.example, *self.labels = self.iterator.get_next()
-
         if config.use_adversary:
-            self.labels, self.pivots, self.pivot_labels, = self.labels
+            self.example, self.labels, self.pivots, self.pivot_labels = self.iterator.get_next()
             print(self.pivots.get_shape())
+        else:
+            self.example, self.labels = self.iterator.get_next()
 
         if evaluate:
             # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
@@ -80,16 +80,22 @@ class Model():
             self.logits = arch(self.example, config, self.training_phase)
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)
 
+        epoch_bounds = [64, 128, 256, 420, 512, 720, 1024]
+        lr_values = [1e-3, 4e-4, 1e-4, 6e-5, 1e-5, 6e-6, 1e-6, 2e-7]
+        learning_rate = tf.train.piecewise_constant(self.global_step, boundaries=[s*steps_per_epoch for s in
+            epoch_bounds], values=lr_values)
 
         if config.use_adversary:
             adv = Adversary(config,
                 classifier_logits=self.logits,
                 labels=self.labels,
-                auxillary_variables=self.pivots,
+                pivots=self.pivots,
+                pivot_labels=self.pivot_labels,
                 training_phase=self.training_phase,
+                predictor_learning_rate=learning_rate,
                 args=args)
 
-            self.cross_entropy = adv.predictor_loss
+            self.cost = adv.predictor_loss
             self.adv_loss = adv.adversary_combined_loss
             self.total_loss = adv.total_loss
             self.predictor_train_op = adv.predictor_train_op
@@ -99,17 +105,10 @@ class Model():
             self.joint_train_op = adv.joint_train_op
             
         else:
-
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             self.cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits,
                 labels=self.labels)
             self.cost = tf.reduce_mean(self.cross_entropy)
-
-            epoch_bounds = [64, 128, 256, 420, 512, 720, 1024]
-            lr_values = [1e-3, 4e-4, 1e-4, 6e-5, 1e-5, 6e-6, 1e-6, 2e-7]
-
-            learning_rate = tf.train.piecewise_constant(self.global_step, boundaries=[s*steps_per_epoch for s in
-                epoch_bounds], values=lr_values)
 
             with tf.control_dependencies(update_ops):
                 # Ensures that we execute the update_ops before performing the train_step
@@ -132,7 +131,7 @@ class Model():
 
         tf.summary.scalar('accuracy', self.accuracy)
         tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('Dcost', self.cost)
+        tf.summary.scalar('cost', self.cost)
         tf.summary.scalar('auc', self.auc_op)
         self.merge_op = tf.summary.merge_all()
 

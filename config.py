@@ -41,7 +41,7 @@ class config_test(object):
     mode = 'alpha'
     n_layers = 5
     num_epochs = 512
-    batch_size = 4096
+    batch_size = 128
     ema_decay = 0.999
     learning_rate = 1e-4
     momentum = 0.9
@@ -61,7 +61,7 @@ class config_test(object):
     proj_dim = 32
 
 class directories(object):
-    train = '/data/projects/punim0011/jtan/data/p4_b2sll_train.h5'
+    train = '/data/projects/punim0011/jtan/data/p4_b2sll_val.h5'
     test = '/data/projects/punim0011/jtan/data/p4_b2sll_test.h5'
     val = '/data/projects/punim0011/jtan/data/p4_b2sll_val.h5'
     tensorboard = 'tensorboard'

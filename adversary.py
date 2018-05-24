@@ -8,11 +8,16 @@ import functools
 from config import directories
 
 class Adversary(object):
-    def __init__(self, config, classifier_logits, labels, pivots, pivot_labels, args, training_phase, evaluate=False):
+    def __init__(self, config, classifier_logits, labels, pivots, pivot_labels, args, training_phase, 
+            predictor_learning_rate, evaluate=False):
         # Add ops to the graph for adversarial training
         
         adversary_losses_dict = {}
         adversary_logits_dict = {}
+
+        if len(config.pivots) == 1:
+            pivots = tf.expand_dims(pivots, axis=1)
+            pivot_labels = tf.expand_dims(pivot_labels, axis=1)
 
         for i, pivot in enumerate(config.pivots):
             # Introduce separate adversary for each pivotal variable
@@ -57,7 +62,7 @@ class Adversary(object):
             predictor_opt = tf.train.AdamOptimizer(config.learning_rate)
             self.joint_step = tf.Variable(0, name='predictor_global_step', trainable=False)
             self.predictor_train_op = predictor_opt.minimize(self.total_loss, name='predictor_opt', 
-                global_step=joint_step, var_list=theta_f)
+                global_step=self.joint_step, var_list=theta_f)
             # self.joint_train_op = predictor_optimizer.minimize(self.total_loss, name='joint_opt', 
             # global_step=predictor_gs, var_list=theta_f)
 
@@ -71,9 +76,9 @@ class Adversary(object):
         with tf.control_dependencies([self.predictor_train_op]):
             self.joint_train_op = tf.group(maintain_predictor_averages_op)
 
-        classifier_pred = tf.argmax(self.logits, 1)
-        true_background = tf.boolean_mask(pivots, (1-labels))
-        pred_background = tf.boolean_mask(pivots, (1-classifier_pred))
+        classifier_pred = tf.argmax(classifier_logits, 1)
+        true_background = tf.boolean_mask(pivots, tf.cast((1-labels), tf.bool))
+        pred_background = tf.boolean_mask(pivots, tf.cast((1-classifier_pred), tf.bool))
 
         tf.summary.scalar('adversary_loss', self.adversary_combined_loss)
         tf.summary.scalar('total_loss', self.total_loss)

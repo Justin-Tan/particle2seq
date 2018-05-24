@@ -16,6 +16,7 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 def train(config, args):
 
+    assert(config.use_adversary is False), 'To use adversarial training, run `adv_train.py`'
     start_time = time.time()
     global_step, n_checkpoints, v_auc_best = 0, 0, 0.
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
@@ -53,7 +54,7 @@ def train(config, args):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, cnn.labels_placeholder:labels})
 
             # Run utils
-            v_auc_best = Utils.run_utils(cnn, config_train, directories, sess, saver, train_handle,
+            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
 
             while True:

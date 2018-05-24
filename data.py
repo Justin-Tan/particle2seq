@@ -8,9 +8,15 @@ class Data(object):
 
     @staticmethod
     def load_data(filename, evaluate=False, adversary=False):
+
+        if evaluate:
+            config = config_test
+        else:
+            config = config_train
+
         df = pd.read_hdf(filename, key='df').sample(frac=1).reset_index(drop=True)
         # auxillary = ['labels', 'MCtype', 'channel', 'evtNum', 'idx', 'mbc', 'nCands', 'deltae']
-        auxillary = ['label', 'B_deltaE', 'B_Mbc', 'B_eventCached_boevtNum', 'B_ewp_channel']
+        auxillary = ['label', 'B_deltaE', 'B_Mbc', 'B_eventCached_boevtNum', 'B_ewp_channel', 'B_dilepton_type']
         df_features = df.drop(auxillary, axis=1)
 
         if evaluate:
@@ -21,11 +27,11 @@ class Data(object):
                 pivot_bins = ['mbc_labels']
                 pivot_df = df[pivots]
                 pivot_df = pivot_df.assign(mbc_labels=pd.qcut(df['B_Mbc'], q=config.adv_n_classes, labels=False))
-                pivot_features = pivot_df[pivots]
-                pivot_labels = pivot_df[pivot_bins]
+                pivot_features = pivot_df['B_Mbc']
+                pivot_labels = pivot_df['mbc_labels']
 
-                return np.nan_to_num(df_features.values), df['label'].values.astype(np.int32), 
-                    pivot_df.values.astype(np.float32), pivot_labels.values.astype(np.int32)
+                return np.nan_to_num(df_features.values), df['label'].values.astype(np.int32), \
+                    pivot_features.values.astype(np.float32), pivot_labels.values.astype(np.int32)
             else:
                 return np.nan_to_num(df_features.values), df['label'].values.astype(np.int32)
 
@@ -65,7 +71,7 @@ class Data(object):
         dataset = dataset.padded_batch(
             batch_size,
             padded_shapes=(tf.TensorShape([None]), tf.TensorShape([]), tf.TensorShape([]), tf.TensorShape([])),
-            padding_values=(0.,0,0,0))
+            padding_values=(0.,0,0.,0))
 
         if test is True:
             dataset = dataset.repeat()

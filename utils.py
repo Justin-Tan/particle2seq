@@ -119,7 +119,7 @@ class Utils(object):
     def dense_network(x, n_layers, hidden_nodes, keep_prob, n_input, n_classes, scope, layer, actv=tf.nn.elu, reuse=False, training=True):
 
         SELU_initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_IN')
-        init = SELU_initializer if layer is selu_layer else tf.contrib.layers.xavier_initializer()
+        init = SELU_initializer if layer is Utils.selu_layer else tf.contrib.layers.xavier_initializer()
         assert n_layers == len(hidden_nodes), 'Specified layer nodes and number of layers do not correspond.'
         layers = [x]
 
@@ -128,7 +128,7 @@ class Utils(object):
                                     keep_prob = keep_prob, training=training)
             layers.append(hidden_0)
             for n in range(0,n_layers-1):
-                hidden_n = layer(layers[-1], shape=[hidden_nodes[n], hidden_layer_nodes[n+1]], name='hidden{}'.format(n+1),
+                hidden_n = layer(layers[-1], shape=[hidden_nodes[n], hidden_nodes[n+1]], name='hidden{}'.format(n+1),
                                     keep_prob=keep_prob, training=training, actv=actv)
                 layers.append(hidden_n)
 
@@ -212,9 +212,9 @@ class Utils(object):
         feed_dict_train = {model.training_phase: False, model.handle: train_handle}
         feed_dict_test = {model.training_phase: False, model.handle: test_handle}
 
-        t_acc, t_loss, t_auc, t_summary = sess.run([model.accuracy, model.cross_entropy, model.auc_op, model.merge_op],
+        t_acc, t_loss, t_auc, t_summary = sess.run([model.accuracy, model.cost, model.auc_op, model.merge_op],
                                             feed_dict = feed_dict_train)
-        v_ops = [model.accuracy, model.cross_entropy, model.adv_loss, model.auc_op, model.total_loss, model.merge_op]
+        v_ops = [model.accuracy, model.cost, model.adv_loss, model.auc_op, model.total_loss, model.merge_op]
         v_acc, v_loss, v_adv_loss, v_auc, v_total, v_summary = sess.run(v_ops, feed_dict=feed_dict_test)
         model.train_writer.add_summary(t_summary)
         model.test_writer.add_summary(v_summary)
@@ -232,10 +232,9 @@ class Utils(object):
             save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
             print('Weights saved to file: {}'.format(save_path))
 
-        print('Epoch {}, Step {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} |\n \\
-        Adversarial loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, step, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} | Adv. loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
 
-    return v_auc_best
+        return v_auc_best
 
     @staticmethod
     def top_k_pool(x, k, axis, batch_size=None):
