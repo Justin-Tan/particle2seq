@@ -63,6 +63,9 @@ class Model():
 
         if config.use_adversary:
             self.example, self.labels, self.pivots, self.pivot_labels = self.iterator.get_next()
+            if len(config.pivots) == 1:
+                self.pivots = tf.expand_dims(self.pivots, axis=1)
+                self.pivot_labels = tf.expand_dims(self.pivot_labels, axis=1)
             print(self.pivots.get_shape())
         else:
             self.example, self.labels = self.iterator.get_next()

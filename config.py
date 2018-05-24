@@ -31,7 +31,7 @@ class config_train(object):
     adv_keep_prob = 1.0
     adv_hidden_nodes = [256,512,512,256]
     adv_learning_rate = 1e-3
-    adv_lambda = 8
+    adv_lambda = 1
     adv_iterations = 4
     K = adv_iterations
     adv_n_classes = 10  # number of bins for discretized predictions
@@ -41,7 +41,7 @@ class config_test(object):
     mode = 'alpha'
     n_layers = 5
     num_epochs = 512
-    batch_size = 128
+    batch_size = 8192
     ema_decay = 0.999
     learning_rate = 1e-4
     momentum = 0.9

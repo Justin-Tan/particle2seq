@@ -56,6 +56,7 @@ def train(config, args):
             cnn.test_pivots_placeholder:test_pivots,
             cnn.test_pivot_labels_placeholder:test_pivot_labels})
 
+
         for epoch in range(config.num_epochs):
             sess.run(cnn.train_iterator.initializer, feed_dict={
                 cnn.features_placeholder:features,
@@ -67,6 +68,8 @@ def train(config, args):
             v_auc_best = Utils.run_adv_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, args.name)
             train_feed = {cnn.training_phase: True, cnn.handle: train_handle}
+
+            
             while True:
                 try:
                     # Train adversary for K iterations relative to predictive model

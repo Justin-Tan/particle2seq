@@ -1,2 +1,6 @@
 *
 !.gitignore
+*.h5
+*.png
+*.pdf
+*.jpg

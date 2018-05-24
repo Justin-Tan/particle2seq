@@ -15,10 +15,6 @@ class Adversary(object):
         adversary_losses_dict = {}
         adversary_logits_dict = {}
 
-        if len(config.pivots) == 1:
-            pivots = tf.expand_dims(pivots, axis=1)
-            pivot_labels = tf.expand_dims(pivot_labels, axis=1)
-
         for i, pivot in enumerate(config.pivots):
             # Introduce separate adversary for each pivotal variable
             mode = 'background'
