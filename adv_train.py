@@ -56,7 +56,44 @@ def train(config, args):
             cnn.test_pivots_placeholder:test_pivots,
             cnn.test_pivot_labels_placeholder:test_pivot_labels})
 
+        # Pretrain classifier
+        print('Pretraining classifer for {} epochs'.format(config.n_epochs_initial))
+        for epoch in range(config.n_epochs_initial):
+            sess.run(cnn.train_iterator.initializer, feed_dict={
+                cnn.features_placeholder:features,
+                cnn.labels_placeholder:labels,
+                cnn.pivots_placeholder:pivots,
+                cnn.pivot_labels_placeholder:pivot_labels})
 
+            # Run utils
+            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+                test_handle, start_time, v_auc_best, epoch, args.name)
+            train_feed = {cnn.training_phase: True, cnn.handle: train_handle}
+
+            while True:
+                try:
+                    # Update weights
+                    sess.run([cnn.predictor_train_op, cnn.update_accuracy], 
+                        feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
+                    
+                except tf.errors.OutOfRangeError:
+                    print('End of epoch!')
+                    break
+
+                except KeyboardInterrupt:
+                    save_path = saver.save(sess, os.path.join(directories.checkpoints,
+                        'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
+                    print('Interrupted, model saved to: ', save_path)
+                    sys.exit()
+
+        save_path = saver.save(sess, os.path.join(directories.checkpoints,
+                               'p2seq_{}_end.ckpt'.format(args.name)),
+                               global_step=epoch)
+
+        print("Initial training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
+        
+        # Begin adversarial training
+        print('<<<============================ Pretraining complete. Beginning adversarial training ============================>>>')
         for epoch in range(config.num_epochs):
             sess.run(cnn.train_iterator.initializer, feed_dict={
                 cnn.features_placeholder:features,

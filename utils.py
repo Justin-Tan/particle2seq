@@ -167,7 +167,7 @@ class Utils(object):
             return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=tf.get_variable_scope().name)
 
     @staticmethod
-    def plot_distributions(model, epoch, sess, handle, nbins=64, notebook=False):
+    def plot_distributions(model, name, epoch, sess, handle, nbins=64, notebook=False):
 
         import matplotlib as mpl
         mpl.use('Agg')
@@ -193,7 +193,7 @@ class Utils(object):
                 sig = pdf[pdf['labels']>0.5]
                 post_sig = pdf[(pdf['labels']==1) & (pdf['predictions']>threshold)]
                 print('Post-selection (signal):', post_sig.shape[0])
-                if post_sig.shape[0] < 1:
+                if post_sig.shape[0] < 10:
                    pass 
                 else:
                     sns.distplot(post_sig[variable], hist=True, kde=True, label='Signal post-cut', bins=nbins)
@@ -210,7 +210,7 @@ class Utils(object):
                 plt.show()
             else:
                 disttype = 'signal' if signal else 'bkg'
-                plt.savefig('graphs/{}_{}_dist_adv-ep{}.pdf'.format(variable, disttype, epoch), bbox_inches='tight',format='pdf', dpi=512)
+                plt.savefig('graphs/{}_{}_dist_adv-ep{}_{}.pdf'.format(variable, disttype, epoch, name), bbox_inches='tight',format='pdf', dpi=512)
             plt.gcf().clear()
 
         def binscatter(variable, x, y, nbins=69):
@@ -229,7 +229,7 @@ class Utils(object):
             if notebook:
                 plt.show()
             else:
-                plt.savefig('graphs/{}_adv-ep{}_scatter.pdf'.format(variable, epoch), bbox_inches='tight',format='pdf', dpi=1000)
+                plt.savefig('graphs/{}_adv-ep{}_scatter_{}.pdf'.format(variable, epoch, name), bbox_inches='tight',format='pdf', dpi=1000)
             plt.gcf().clear()
 
         normPlot('mbc', df_z, epoch=epoch, signal=False)
@@ -308,7 +308,7 @@ class Utils(object):
             print('Weights saved to file: {}'.format(save_path))
 
         print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} | Adv. loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
-        Utils.plot_distributions(model, epoch, sess, handle=test_handle)
+        Utils.plot_distributions(model, name, epoch, sess, handle=test_handle)
 
 
         return v_auc_best

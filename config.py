@@ -35,6 +35,7 @@ class config_train(object):
     adv_iterations = 4
     K = adv_iterations
     adv_n_classes = 10  # number of bins for discretized predictions
+    n_epochs_initial = 10
 
 
 class config_test(object):

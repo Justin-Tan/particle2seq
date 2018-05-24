@@ -57,7 +57,7 @@ class Adversary(object):
             # Ensures that we execute the update_ops before performing the train_step
             predictor_opt = tf.train.AdamOptimizer(config.learning_rate)
             self.joint_step = tf.Variable(0, name='predictor_global_step', trainable=False)
-            self.predictor_train_op = predictor_opt.minimize(self.total_loss, name='predictor_opt', 
+            self.predictor_train_op = predictor_opt.minimize(self.predictor_loss, name='predictor_opt', 
                 global_step=self.joint_step, var_list=theta_f)
             # self.joint_train_op = predictor_optimizer.minimize(self.total_loss, name='joint_opt', 
             # global_step=predictor_gs, var_list=theta_f)
