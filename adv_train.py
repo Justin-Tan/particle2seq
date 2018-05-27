@@ -57,40 +57,41 @@ def train(config, args):
             cnn.test_pivot_labels_placeholder:test_pivot_labels})
 
         # Pretrain classifier
-        print('Pretraining classifer for {} epochs'.format(config.n_epochs_initial))
-        for epoch in range(config.n_epochs_initial):
-            sess.run(cnn.train_iterator.initializer, feed_dict={
-                cnn.features_placeholder:features,
-                cnn.labels_placeholder:labels,
-                cnn.pivots_placeholder:pivots,
-                cnn.pivot_labels_placeholder:pivot_labels})
+        if not args.skip_pretrain:
+            print('Pretraining classifer for {} epochs'.format(config.n_epochs_initial))
+            for epoch in range(config.n_epochs_initial):
+                sess.run(cnn.train_iterator.initializer, feed_dict={
+                    cnn.features_placeholder:features,
+                    cnn.labels_placeholder:labels,
+                    cnn.pivots_placeholder:pivots,
+                    cnn.pivot_labels_placeholder:pivot_labels})
 
-            # Run utils
-            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
-                test_handle, start_time, v_auc_best, epoch, args.name)
-            train_feed = {cnn.training_phase: True, cnn.handle: train_handle}
+                # Run utils
+                v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+                    test_handle, start_time, v_auc_best, epoch, args.name)
+                train_feed = {cnn.training_phase: True, cnn.handle: train_handle}
 
-            while True:
-                try:
-                    # Update weights
-                    sess.run([cnn.predictor_train_op, cnn.update_accuracy], 
-                        feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
-                    
-                except tf.errors.OutOfRangeError:
-                    print('End of epoch!')
-                    break
+                while True:
+                    try:
+                        # Update weights
+                        sess.run([cnn.predictor_train_op, cnn.update_accuracy], 
+                            feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
+                        
+                    except tf.errors.OutOfRangeError:
+                        print('End of epoch!')
+                        break
 
-                except KeyboardInterrupt:
-                    save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                        'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
-                    print('Interrupted, model saved to: ', save_path)
-                    sys.exit()
+                    except KeyboardInterrupt:
+                        save_path = saver.save(sess, os.path.join(directories.checkpoints,
+                            'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
+                        print('Interrupted, model saved to: ', save_path)
+                        sys.exit()
 
-        save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                               'p2seq_{}_end.ckpt'.format(args.name)),
-                               global_step=epoch)
+            save_path = saver.save(sess, os.path.join(directories.checkpoints,
+                                   'p2seq_{}_end.ckpt'.format(args.name)),
+                                   global_step=epoch)
 
-        print("Initial training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
+            print("Initial training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
         
         # Begin adversarial training
         print('<<<============================ Pretraining complete. Beginning adversarial training ============================>>>')
@@ -143,6 +144,7 @@ def main(**kwargs):
     parser.add_argument("-n", "--name", default="p2seq_adv", help="Checkpoint/Tensorboard label")
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
         choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection')))
+    parser.add_argument("-skip_pt", "--skip_pretrain", help="skip pretraining of classifier", action="store_true")
     args = parser.parse_args()
     config = config_train
 
