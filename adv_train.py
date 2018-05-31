@@ -111,10 +111,10 @@ def train(config, args):
             while True:
                 try:
                     # Train adversary for K iterations relative to predictive model
-                    # if joint_step % config.K == 0:
-                    joint_step, *ops = sess.run([cnn.joint_step, cnn.joint_train_op, cnn.update_accuracy], train_feed)
-                    # else:
-                    sess.run([cnn.adversary_train_op], train_feed)
+                    if joint_step % config.K == 0:
+                        joint_step, *ops = sess.run([cnn.joint_step, cnn.joint_train_op, cnn.update_accuracy], train_feed)
+                    else:
+                        sess.run([cnn.adversary_train_op], train_feed)
 
                     if joint_step % 12500 == 0:  # Run diagnostics
                         v_auc_best = Utils.run_adv_diagnostics(cnn, config_train, directories, sess, saver, train_handle,

@@ -25,11 +25,12 @@ def evaluate(config, args):
     config.max_seq_len = int(eval_features.shape[1]/config.features_per_particle)
 
     # Build graph
-    cnn = Model(config, directories, features=eval_features, labels=eval_labels, args=args, evaluate=True)
+    cnn = Model(config, features=eval_features, labels=eval_labels, args=args, evaluate=True)
 
-    # Restore the moving average version of the learned variables for eval.
-    variables_to_restore = cnn.ema.variables_to_restore()
-    saver = tf.train.Saver(variables_to_restore)
+    # Restore the moving average version of the learned variables for eval - rework this for adversary
+    # variables_to_restore = cnn.ema.variables_to_restore()
+    # saver = tf.train.Saver(variables_to_restore)
+    saver = tf.train.Saver()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         # Initialize variables
@@ -78,8 +79,8 @@ def evaluate(config, args):
         h5_out = os.path.join(directories.results, '{}_{}_results.h5'.format(out, args.architecture))
         eval_df.to_hdf(h5_out, key='df')
         print('Saved to', h5_out)
-        Utils.plot_ROC_curve(eval_df['y_true'], eval_df['y_prob'], 
-                meta=r'$b \rightarrow s \gamma$' + ' Channel {}'.format(int(eval_df['ewp_channel'].head().mean())), out=out)
+        # Utils.plot_ROC_curve(eval_df['y_true'], eval_df['y_prob'], 
+        #        meta=r'$b \rightarrow s \gamma$' + ' Channel {}'.format(int(eval_df['B_ewp_channel'].head().mean())), out=out)
 
         print("Validation accuracy: {:.3f}".format(v_acc))
         print("Validation AUC: {:.3f}".format(v_auc))

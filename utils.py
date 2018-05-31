@@ -314,6 +314,39 @@ class Utils(object):
         return v_auc_best
 
     @staticmethod
+    def plot_ROC_curve(y_true, y_pred, out, meta = ''):
+
+        import matplotlib as mpl
+        mpl.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.metrics import roc_curve, auc
+
+        plt.style.use('seaborn-darkgrid')
+        plt.style.use('seaborn-talk')
+        plt.style.use('seaborn-pastel')
+
+        # Compute ROC curve, integrate
+        fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+        roc_auc = auc(fpr, tpr)
+        print('Val AUC:', roc_auc)
+
+        plt.figure()
+        plt.axes([.1,.1,.8,.7])
+        plt.figtext(.5,.9, r'$\mathrm{Receiver \;Operating \;Characteristic}$', fontsize=15, ha='center')
+        plt.figtext(.5,.85, meta, fontsize=10,ha='center')
+        plt.plot(fpr, tpr, # color='darkorange',
+                         lw=2, label='ROC (area = %0.4f)' % roc_auc)
+        plt.plot([0, 1], [0, 1], color='navy', lw=1.0, linestyle='--')
+        plt.xlim([-0.05, 1.05])
+        plt.ylim([-0.05, 1.05])
+        plt.xlabel(r'$\mathrm{False \;Positive \;Rate}$')
+        plt.ylabel(r'$\mathrm{True \;Positive \;Rate}$')
+        plt.legend(loc="lower right")
+        plt.savefig(os.path.join('results', '{}_ROC.pdf'.format(out)), format='pdf', dpi=1000)
+        plt.gcf().clear()
+
+    @staticmethod
     def top_k_pool(x, k, axis, batch_size=None):
         # Input: tensor x with shape 'NHWC'
         

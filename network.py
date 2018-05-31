@@ -301,3 +301,89 @@ class Network(object):
         
         return logits_CNN
 
+    
+    @staticmethod
+    def sequence_deep_conv(x, config, training, reuse=False, actv=tf.nn.relu):
+        print('Using convolutional architecture')
+        init = tf.contrib.layers.xavier_initializer()
+        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
+        
+        # reshape outputs to [batch_size, max_time_steps, config.embedding_dim, 1]
+        # max_time = tf.shape(x)[1]
+        max_time = config.max_seq_len
+        cnn_inputs = tf.expand_dims(tf.reshape(x, [-1, max_time, config.embedding_dim]), -1)
+
+        # Convolution + max-pooling over n-word windows
+        filter_sizes = [3,4,5]
+        n_filters = 128  # output dimensionality
+        feature_maps = list()
+
+        for filter_size in filter_sizes:
+            # Each kernel extracts a specific n-gram of particles
+            with tf.variable_scope('conv_pool2D-{}'.format(filter_size)) as scope:
+
+                fs = [filter_size, config.embedding_dim, 1, n_filters]
+                K = tf.get_variable('filter-{}'.format(filter_size), shape=fs, initializer=init)
+                b = tf.get_variable('bias-{}'.format(filter_size), shape=[n_filters], initializer=tf.constant_initializer(0.01))
+                conv_i = tf.nn.conv2d(cnn_inputs, filter=K, strides=[1,1,1,1], padding='VALID')
+                conv_i = actv(tf.nn.bias_add(conv_i, b))
+                conv_i = tf.layers.batch_normalization(conv_i, **kwargs)
+
+                # Max over-time pooling - final size [batch_size, 1, 1, n_filters]
+                # pool_i = tf.nn.max_pool(conv_i, ksize=[1,max_time-filter_size+1,1,1], strides=[1,1,1,1], padding='VALID')
+                pool_i = tf.nn.max_pool(conv_i, ksize=[1,filter_size,1,1], strides=[1,1,1,1], padding='VALID')
+
+                # conv_i = tf.layers.conv2d(cnn_inputs, filters=n_filters, kernel_size=[filter_size, config.embedding_dim], 
+                #     padding='valid', use_bias=True, activation=actv, kernel_initializer=init)
+                # pool_i = tf.layers.max_pooling2d(conv_i, pool_size=[max_time-filter_size+1], strides=[1,1,1,1], padding='valid')
+
+                feature_maps.append(pool_i)
+        
+        # Combine feature maps
+        print([fm.get_shape().as_list() for fm in feature_maps])
+        convs = tf.concat(feature_maps, axis=1)
+        print('before aggregated convolution:', convs.get_shape().as_list())
+
+        agg_conv_filters = [256,128]
+        convs = tf.layers.conv2d(convs, filters=agg_conv_filters[0], kernel_size=[3,1], kernel_initializer=init, activation=actv)
+        convs = tf.layers.batch_normalization(convs, **kwargs)
+        convs = tf.layers.conv2d(convs, filters=agg_conv_filters[1], kernel_size=[3,1], kernel_initializer=init, activation=actv)
+
+        print('after aggregated convolution:', convs.get_shape().as_list())
+        feature_vector = tf.contrib.layers.flatten(convs)
+        feature_vector = tf.layers.dropout(feature_vector, rate=1-config.conv_keep_prob, training=training)
+
+        # Fully connected layer for classification
+        with tf.variable_scope("fc"):
+            logits_CNN = tf.layers.dense(feature_vector, units=config.n_classes, kernel_initializer=init)
+        
+        return logits_CNN
+
+    @staticmethod
+    def dense_network(x, name='toy_fisher', training=True, actv=tf.nn.relu):
+        # Toy dense network for binary classification
+        
+        init = tf.contrib.layers.xavier_initializer()
+        shape = [512,512,512,512,512]
+        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': True}
+
+        with tf.variable_scope(name, initializer=init, reuse=tf.AUTO_REUSE) as scope:
+            h0 = tf.layers.dense(x, units=shape[0], activation=actv)
+            h0 = tf.layers.batch_normalization(h0, **kwargs)
+
+            h1 = tf.layers.dense(h0, units=shape[1], activation=actv)
+            h1 = tf.layers.batch_normalization(h1, **kwargs)
+
+            h2 = tf.layers.dense(h1, units=shape[2], activation=actv)
+            h2 = tf.layers.batch_normalization(h2, **kwargs)
+
+            h3 = tf.layers.dense(h2, units=shape[3], activation=actv)
+            h3 = tf.layers.batch_normalization(h3, **kwargs)
+
+            h4 = tf.layers.dense(h3, units=shape[3], activation=actv)
+            h4 = tf.layers.batch_normalization(h4, **kwargs)
+
+        out = tf.layers.dense(h4, units=2, kernel_initializer=init)
+        
+        return out
+

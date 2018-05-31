@@ -27,14 +27,14 @@ class config_train(object):
     # Adversary hyperparameters
     use_adversary = True
     pivots = ['Mbc']  # or ['Mbc', 'deltaE']
-    adv_n_layers = 4
+    adv_n_layers = 3
     adv_keep_prob = 1.0
-    adv_hidden_nodes = [256,512,512,256]
+    adv_hidden_nodes = [256,256,256]
     adv_learning_rate = 1e-3
-    adv_lambda = 4
+    adv_lambda = 64
     adv_iterations = 4
     K = adv_iterations
-    adv_n_classes = 10  # number of bins for discretized predictions
+    adv_n_classes = 12  # number of bins for discretized predictions
     n_epochs_initial = 4
 
 
@@ -60,6 +60,7 @@ class config_test(object):
     attention = False
     attention_dim = 256
     proj_dim = 32
+    use_adversary = False
 
 class directories(object):
     train = '/data/projects/punim0011/jtan/data/p4_b2sll_train.h5'

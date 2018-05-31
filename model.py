@@ -34,7 +34,7 @@ class Model():
 
         steps_per_epoch = int(self.features_placeholder.get_shape()[0])//config.batch_size
 
-        if config.use_adversary:
+        if config.use_adversary and not evaluate:
             self.pivots_placeholder = tf.placeholder(tf.float32)
             self.pivot_labels_placeholder = tf.placeholder(tf.int32)
             self.test_pivots_placeholder = tf.placeholder(tf.float32)
@@ -72,7 +72,8 @@ class Model():
 
         if evaluate:
             # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
-            self.logits = arch(self.example, config, self.training_phase)
+            with tf.variable_scope('classifier') as scope:
+                self.logits = arch(self.example, config, self.training_phase)
             self.softmax, self.pred = tf.nn.softmax(self.logits)[:,1], tf.argmax(self.logits, 1)
             self.ema = tf.train.ExponentialMovingAverage(decay=config.ema_decay, num_updates=self.global_step)
             return
@@ -81,6 +82,7 @@ class Model():
 
         with tf.variable_scope('classifier') as scope:
             self.logits = arch(self.example, config, self.training_phase)
+
         self.softmax, self.pred = tf.nn.softmax(self.logits), tf.argmax(self.logits, 1)
 
         epoch_bounds = [64, 128, 256, 420, 512, 720, 1024]
