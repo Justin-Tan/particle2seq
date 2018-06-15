@@ -7,6 +7,7 @@ from network import Network
 from data import Data
 from config import config_test, directories
 from adversary import Adversary
+from utils import Utils
 
 class Model():
     def __init__(self, config, features, labels, args, evaluate=False):
@@ -154,6 +155,7 @@ class Model():
                 labels=(1-tf.one_hot(self.labels, depth=1)))
             self.cost = tf.reduce_mean(self.cross_entropy)
 
+            # Calculate Fisher Information matrix
             bkg_xentropy = tf.boolean_mask(self.cross_entropy, tf.logical_not(tf.cast(self.labels, tf.bool)))
             log_likelihood = -tf.reduce_sum(self.cross_entropy)
 
@@ -168,7 +170,19 @@ class Model():
 
             self.output_gradients = tf.reduce_mean(tf.square(tf.squeeze(dfdTheta)))
             bkg_output_gradients = tf.reduce_mean(tf.square(tf.squeeze(bkg_dfdTheta)))
-            self.cost += config.fisher_penalty * self.observed_fisher_information
+
+            # Calculate mutual information
+            self.MI_logits_theta = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.logits),
+                tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
+            self.MI_xent_theta = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.cross_entropy),
+                tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
+
+            if args.fisher_penalty:
+                self.cost += config.fisher_penalty * self.observed_fisher_information
+            
+            if args.mutual_information_penalty:
+                self.cost += config.MI_penalty * self.MI_logits_theta
+
             # self.cost += config.fisher_penalty * self.output_gradients
 
             # Alternatively, calculate the observed Fisher Information as the negative expected Hessian(ll)
@@ -195,12 +209,6 @@ class Model():
             with tf.control_dependencies(update_ops+[self.opt_op]):
                 self.train_op = tf.group(maintain_averages_op)
 
-        # Calculate mutual information
-        MI_logits_theta = tf.py_func(utils.mutual_information_1D, inp=[tf.squeeze(self.logits),
-            tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
-        MI_xent_theta = tf.py_func(utils.mutual_information_1D, inp=[tf.squeeze(self.cross_entropy),
-            tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
-
         self.str_accuracy, self.update_accuracy = tf.metrics.accuracy(self.labels, self.pred)
         correct_prediction = tf.equal(self.labels, tf.cast(self.pred, tf.int32))
         _, self.auc_op = tf.metrics.auc(predictions=self.pred, labels=self.labels, num_thresholds=1024)
@@ -212,8 +220,9 @@ class Model():
         tf.summary.scalar('auc', self.auc_op)
         tf.summary.scalar('fisher_information', self.observed_fisher_information)
         tf.summary.scalar('bkg_fisher_information', self.observed_bkg_fisher_information)
-        #tf.summary.scalar('fisher_information_from_hessian', self.observed_fisher_information_from_hessian)
-        #tf.summary.scalar('bkg_fisher_information_from_hessian', self.observed_bkg_fisher_information_from_hessian)
+        tf.summary.scalar('logits_theta_MI', self.MI_logits_theta)
+        tf.summary.scalar('xent_theta_MI', self.MI_xent_theta)    
+
         pivot = 'Mbc'
         tf.summary.histogram('true_{}_background_distribution'.format(pivot), true_background_pivots[:,0])
         tf.summary.histogram('pred_{}_background_distribution'.format(pivot), pred_background_pivots[:,0])

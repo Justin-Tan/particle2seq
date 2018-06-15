@@ -99,6 +99,9 @@ def main(**kwargs):
     parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
         choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection', 'dense')))
+    parser.add_argument("-fisher", "--fisher_penalty", help="Penalize Fisher Information of pivots", action="store_true")
+    parser.add_argument("-MI", "--mutual_information_penalty", help="Penalize mutual information between pivots and logits", action="store_true")
+
     args = parser.parse_args()
     config = config_train
 
