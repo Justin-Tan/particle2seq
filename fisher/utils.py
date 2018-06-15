@@ -384,15 +384,6 @@ class Utils(object):
         return mi
 
     @staticmethod
-    def mutual_information_1D_sklearn(x, y, bins=25):
-    from sklearn.metrics import mutual_info_score
-
-        c_xy = np.histogram2d(x, y, bins)[0]
-        mi = mutual_info_score(None, None, contingency=c_xy)
-
-        return mi
-
-    @staticmethod
     def top_k_pool(x, k, axis, batch_size=None):
         # Input: tensor x with shape 'NHWC'
         
