@@ -28,9 +28,9 @@ class config_train(object):
     # Adversary hyperparameters
     use_adversary = False
     # pivots = ['Mbc']  # or ['Mbc', 'deltaE']
-    pivots = ['B_Mbc' , 'B_cms_p', 'B_cms_pt'] # 'q_sq', 'B_cms_q2Bh']
-    pivots += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
-    pivots += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
+    pivots = ['B_Mbc'] # , 'B_cms_p', 'B_cms_pt'] # 'q_sq', 'B_cms_q2Bh']
+    # pivots += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
+    # pivots += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
     adv_n_layers = 3
     adv_keep_prob = 1.0
     adv_hidden_nodes = [128,128,128]
@@ -68,9 +68,9 @@ class config_test(object):
     use_adversary = False
     fisher_penalty = 1000
     #pivots = ['Mbc']  # or ['Mbc', 'deltaE']
-    pivots = ['B_Mbc', 'B_cms_p', 'B_cms_pt']#, 'q_sq', 'B_cms_q2Bh']
-    pivots += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
-    pivots += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
+    pivots = ['B_Mbc'] #, 'B_cms_p', 'B_cms_pt']#, 'q_sq', 'B_cms_q2Bh']
+    # pivots += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
+    # pivots += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
     adv_n_layers = 3
     adv_keep_prob = 1.0
     adv_hidden_nodes = [256,256,256]

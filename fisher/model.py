@@ -38,6 +38,8 @@ class Model():
         self.test_labels_placeholder = tf.placeholder(tf.int32)
         self.pivots_placeholder = tf.placeholder(tf.float32)
         self.test_pivots_placeholder = tf.placeholder(tf.float32)
+        self.pivot_marginal_placeholder = tf.placeholder(tf.float32)
+        self.test_pivot_marginal_placeholder = tf.placeholder(tf.float32)
 
         steps_per_epoch = int(self.features_placeholder.get_shape()[0])//config.batch_size
 
@@ -54,9 +56,9 @@ class Model():
                 sequential=sequential)
         else:
             train_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder,
-                    self.pivots_placeholder, batch_size=config.batch_size, sequential=sequential)
+                    self.pivots_placeholder, self.pivot_marginal_placeholder, batch_size=config.batch_size, sequential=sequential)
             test_dataset = Data.load_dataset(self.test_features_placeholder, self.test_labels_placeholder,
-                    self.pivots_placeholder, config_test.batch_size, test=True, sequential=sequential)
+                    self.test_pivots_placeholder, self.test_pivot_marginal_placeholder, config_test.batch_size, test=True, sequential=sequential)
 
 
         val_dataset = Data.load_dataset(self.features_placeholder, self.labels_placeholder, self.pivots_placeholder,
@@ -75,7 +77,7 @@ class Model():
                 # self.pivots = tf.expand_dims(self.pivots, axis=1)
                 self.pivot_labels = tf.expand_dims(self.pivot_labels, axis=1)
         else:
-            self.example, self.labels, self.pivots = self.iterator.get_next()
+            self.example, self.labels, self.pivots, self.pivot_marginal = self.iterator.get_next()
         self.example.set_shape([None, features.shape[1]])
 
         # if len(config.pivots) == 1:
@@ -172,16 +174,19 @@ class Model():
             bkg_output_gradients = tf.reduce_mean(tf.square(tf.squeeze(bkg_dfdTheta)))
 
             # Calculate mutual information
-            self.MI_logits_theta = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.logits),
+            self.MI_logits_theta_estimate = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.logits),
                 tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
             self.MI_xent_theta = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.cross_entropy),
                 tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
+            self.MI_logits_theta_MINE = Network.MINE(x=tf.squeeze(self.logits), y=tf.squeeze(self.pivots[:,0]), 
+                y_prime=
 
             if args.fisher_penalty:
                 self.cost += config.fisher_penalty * self.observed_fisher_information
             
             if args.mutual_information_penalty:
-                self.cost += config.MI_penalty * self.MI_logits_theta
+                # self.cost += config.MI_penalty * self.MI_logits_theta
+                self.cost += config.MI_penalty * self.MI_logits_theta_MINE
 
             # self.cost += config.fisher_penalty * self.output_gradients
 
@@ -220,7 +225,8 @@ class Model():
         tf.summary.scalar('auc', self.auc_op)
         tf.summary.scalar('fisher_information', self.observed_fisher_information)
         tf.summary.scalar('bkg_fisher_information', self.observed_bkg_fisher_information)
-        tf.summary.scalar('logits_theta_MI', self.MI_logits_theta)
+        tf.summary.scalar('logits_theta_MI_digamma_estimate', self.MI_logits_theta_estimate)
+        tf.summary.scalar('logits_theta_MINE', self.MI_logits_theta_MINE)
         tf.summary.scalar('xent_theta_MI', self.MI_xent_theta)    
 
         pivot = 'Mbc'

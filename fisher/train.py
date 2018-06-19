@@ -22,8 +22,8 @@ def train(config, args):
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     print('Reading data ...')
-    features, labels, pivots = Data.load_data(directories.train)
-    test_features, test_labels, test_pivots = Data.load_data(directories.test)
+    features, labels, pivots, pivot_marginal = Data.load_data(directories.train)
+    test_features, test_labels, test_pivots, test_pivot_marginal = Data.load_data(directories.test)
     config.max_seq_len = int(features.shape[1]/config.features_per_particle)
 
     # Build graph
@@ -50,11 +50,12 @@ def train(config, args):
             cnn.test_features_placeholder:test_features,
             cnn.test_pivots_placeholder:test_pivots,
             cnn.pivots_placeholder:test_pivots,
-            cnn.test_labels_placeholder:test_labels})
+            cnn.test_labels_placeholder:test_labels,
+            cnn.test_pivot_marginal_placeholder:test_pivot_marginal})
 
         for epoch in range(config.num_epochs):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, 
-                cnn.labels_placeholder:labels, cnn.pivots_placeholder:pivots})
+                cnn.labels_placeholder:labels, cnn.pivots_placeholder:pivots, cnn.pivot_marginal_placeholder:pivot_marginal})
 
             # Run utils
             v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
@@ -65,13 +66,16 @@ def train(config, args):
                     # Update weights
                     global_step, *ops = sess.run([cnn.global_step, cnn.opt_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True,
                         cnn.handle: train_handle})
+
+                    # Update MINE
+                    sess.run(cnn.MINE_train_op, feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
                     
                     if global_step % 100 == 0:
                         # Run utils
                         v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
                             test_handle, start_time, v_auc_best, epoch, global_step, args.name)
 
-                    if global_step % 2500 == 0:
+                    if global_step % 5000 == 0:
                         save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
                         print('Weights saved to file: {}'.format(save_path))
 

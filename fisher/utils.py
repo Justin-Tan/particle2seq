@@ -273,7 +273,8 @@ class Utils(object):
         except tf.errors.OutOfRangeError:
             t_auc, t_loss, t_acc = float('nan'), float('nan'), float('nan')
 
-        v_FI, v_MI, v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.observed_fisher_information, model.MI_logits_theta, model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test)
+        v_FI, v_MI, v_MI_MINE v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.observed_fisher_information, model.MI_logits_theta_estimate, 
+            model.mI_logits_theta_MINE, model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test)
         model.test_writer.add_summary(v_summary)
 
         if v_auc > v_auc_best:
@@ -290,7 +291,7 @@ class Utils(object):
             save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
             print('Weights saved to file: {}'.format(save_path))
 
-        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Fisher Info: {:.3f} | MI: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_FI, v_MI, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Fisher Info: {:.3f} | MI: {:.3f} | MI_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_FI, v_MI, v_MI_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
         Utils.plot_distributions(model, name, epoch, step, sess, handle=test_handle)
 
         return v_auc_best
@@ -379,8 +380,8 @@ class Utils(object):
     def mutual_information_1D_kraskov(x, y):
         # k-NN based estimate of mutual information
         from lnc import MI
-
         mi = MI.mi_LNC([x,y],k=5,base=np.exp(1),alpha=0.2)
+
         return mi
 
     @staticmethod
