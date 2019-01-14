@@ -390,3 +390,49 @@ class Network(object):
         
         return out
 
+    @staticmethod
+    def MINE(x, y, y_prime, config, training, num_features, name='MINE', actv=tf.nn.relu):
+        # Mutual Information Neural Estimator
+        
+        init = tf.contrib.layers.xavier_initializer()
+        shape = [128,128,128,128]
+        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': True}
+        # x = tf.reshape(x, [-1, num_features])
+        # x = x[:,:-1]
+        print('Number of X samples for MINE:', x.get_shape())
+        print('Number of Y samples for MINE:', x.get_shape())
+
+        z = tf.concat([x,y], axis=1)
+        z_prime = tf.concat([x,y_prime], axis=1)
+
+        with tf.variable_scope('{}_joint'.format(name), initializer=init, reuse=tf.AUTO_REUSE) as scope:
+            h0 = tf.layers.dense(z, units=shape[0], activation=actv)
+            h0 = tf.layers.batch_normalization(h0, **kwargs)
+
+            h1 = tf.layers.dense(h0, units=shape[1], activation=actv)
+            h1 = tf.layers.batch_normalization(h1, **kwargs)
+
+            h2 = tf.layers.dense(h1, units=shape[2], activation=actv)
+            h2 = tf.layers.batch_normalization(h2, **kwargs)
+
+            # h3 = tf.layers.dense(h2, units=shape[3], activation=actv)
+            # h3 = tf.layers.batch_normalization(h3, **kwargs)
+
+            joint_f = tf.layers.dense(h2, units=1, kernel_initializer=init)
+        
+        with tf.variable_scope('{}_marginal'.format(name), initializer=init, reuse=tf.AUTO_REUSE) as scope:
+            h0_m = tf.layers.dense(z_prime, units=shape[0], activation=actv)
+            h0_m = tf.layers.batch_normalization(h0_m, **kwargs)
+
+            h1_m = tf.layers.dense(h0_m, units=shape[1], activation=actv)
+            h1_m = tf.layers.batch_normalization(h1_m, **kwargs)
+
+            h2_m = tf.layers.dense(h1, units=shape[2], activation=actv)
+            h2_m = tf.layers.batch_normalization(h2_m, **kwargs)
+
+            marginal_f = tf.layers.dense(h2_m, units=1, kernel_initializer=init)
+        
+        MI_lower_bound = tf.reduce_mean(joint_f) - tf.log(tf.reduce_mean(tf.exp(marginal_f)))
+
+        return MI_lower_bound
+
