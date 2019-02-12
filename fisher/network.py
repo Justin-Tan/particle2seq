@@ -360,7 +360,7 @@ class Network(object):
         return logits_CNN
 
     @staticmethod
-    def dense_network(x, config, training, num_features, name='toy_fisher', actv=tf.nn.relu):
+    def dense_network(x, config, training, num_features, name='fully_connected', actv=tf.nn.relu):
         # Toy dense network for binary classification
         
         init = tf.contrib.layers.xavier_initializer()
@@ -368,7 +368,7 @@ class Network(object):
         kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': True}
         # x = tf.reshape(x, [-1, num_features])
         # x = x[:,:-1]
-        print(x.get_shape())
+        print('Input X shape', x.get_shape())
 
         with tf.variable_scope(name, initializer=init, reuse=tf.AUTO_REUSE) as scope:
             h0 = tf.layers.dense(x, units=shape[0], activation=actv)
@@ -388,51 +388,190 @@ class Network(object):
 
         out = tf.layers.dense(h4, units=1, kernel_initializer=init)
         
-        return out
+        return out, h4
 
     @staticmethod
-    def MINE(x, y, y_prime, config, training, num_features, name='MINE', actv=tf.nn.relu):
-        # Mutual Information Neural Estimator
-        
+    def MINE(x, y, y_prime, training, batch_size, name='MINE', actv=tf.nn.elu, dimension=2, labels=None, bkg_only=False, jensen_shannon=False):
+        """
+        Mutual Information Neural Estimator
+        (x,y):      Drawn from joint
+        y_prime:    Drawn from marginal
+
+        returns
+        MI:         Lower bound on mutual information between x,y
+        """
+
         init = tf.contrib.layers.xavier_initializer()
-        shape = [128,128,128,128]
-        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': True}
-        # x = tf.reshape(x, [-1, num_features])
-        # x = x[:,:-1]
-        print('Number of X samples for MINE:', x.get_shape())
-        print('Number of Y samples for MINE:', x.get_shape())
+        drop_rate = 0.0
+        shape = [64,64,64,64,64,64]
+        shape = [128,128,128,128,128]
+        # shape = [512,512,512,512,512,512]
+        shape = [128,128,64,32,16,8,4]  # or[256,256]
+        shape = [128,128]
+        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
+
+        if bkg_only:
+            batch_size = tf.cast(batch_size - tf.reduce_sum(labels), tf.int32)
+
+        if dimension == 2:
+            y, y_prime = tf.expand_dims(y, axis=1), tf.expand_dims(y_prime, axis=1)
+        if len(x.get_shape().as_list()) < 2:
+            x = tf.expand_dims(x, axis=1)
+        # y_prime = tf.random_shuffle(y)
 
         z = tf.concat([x,y], axis=1)
         z_prime = tf.concat([x,y_prime], axis=1)
+        z.set_shape([None, dimension])
+        z_prime.set_shape([None, dimension])
+        print('X SHAPE:', x.get_shape().as_list())
+        print('Z SHAPE:', z.get_shape().as_list())
+        print('Z PRIME SHAPE:', z_prime.get_shape().as_list())
 
-        with tf.variable_scope('{}_joint'.format(name), initializer=init, reuse=tf.AUTO_REUSE) as scope:
-            h0 = tf.layers.dense(z, units=shape[0], activation=actv)
-            h0 = tf.layers.batch_normalization(h0, **kwargs)
+        def statistic_network(t, name='MINE', reuse=False):
+            with tf.variable_scope(name, initializer=init, reuse=reuse) as scope:
 
-            h1 = tf.layers.dense(h0, units=shape[1], activation=actv)
-            h1 = tf.layers.batch_normalization(h1, **kwargs)
+                # h0 = tf.layers.dense(t, units=shape[0], activation=actv)
+                #h0 = tf.layers.dropout(h0, rate=drop_rate, training=training)
+                #h0 = tf.layers.batch_normalization(h0, **kwargs)
+                # h0 = tf.contrib.layers.layer_norm(h0, center=True, scale=True, activation_fn=None)
+                h0 = tf.layers.dense(t, units=shape[0], activation=None)
+                h0 = tf.contrib.layers.layer_norm(h0, center=True, scale=True, activation_fn=actv)
 
-            h2 = tf.layers.dense(h1, units=shape[2], activation=actv)
-            h2 = tf.layers.batch_normalization(h2, **kwargs)
+                # h1 = tf.layers.dense(h0, units=shape[1], activation=actv)
+                #h1 = tf.layers.dropout(h1, rate=drop_rate, training=training)
+                #h1 = tf.layers.batch_normalization(h1, **kwargs)
+                # h1 = tf.contrib.layers.layer_norm(h1, center=True, scale=True, activation_fn=None)
+                h1 = tf.layers.dense(h0, units=shape[1], activation=None)
+                h1 = tf.contrib.layers.layer_norm(h1, center=True, scale=True, activation_fn=actv)
 
-            # h3 = tf.layers.dense(h2, units=shape[3], activation=actv)
-            # h3 = tf.layers.batch_normalization(h3, **kwargs)
+                #h2 = tf.layers.dense(h1, units=shape[2], activation=actv)
+                #h2 = tf.layers.dropout(h2, rate=drop_rate, training=training)
+                #h2 = tf.layers.batch_normalization(h2, **kwargs)
 
-            joint_f = tf.layers.dense(h2, units=1, kernel_initializer=init)
-        
-        with tf.variable_scope('{}_marginal'.format(name), initializer=init, reuse=tf.AUTO_REUSE) as scope:
-            h0_m = tf.layers.dense(z_prime, units=shape[0], activation=actv)
-            h0_m = tf.layers.batch_normalization(h0_m, **kwargs)
+                #h3 = tf.layers.dense(h2, units=shape[3], activation=actv)
+                #h3 = tf.layers.dropout(h3, rate=drop_rate, training=training)
+                #h3 = tf.layers.batch_normalization(h3, **kwargs)
 
-            h1_m = tf.layers.dense(h0_m, units=shape[1], activation=actv)
-            h1_m = tf.layers.batch_normalization(h1_m, **kwargs)
+                out = tf.layers.dense(h1, units=1, kernel_initializer=init)
 
-            h2_m = tf.layers.dense(h1, units=shape[2], activation=actv)
-            h2_m = tf.layers.batch_normalization(h2_m, **kwargs)
+            return out
 
-            marginal_f = tf.layers.dense(h2_m, units=1, kernel_initializer=init)
-        
-        MI_lower_bound = tf.reduce_mean(joint_f) - tf.log(tf.reduce_mean(tf.exp(marginal_f)))
+        def log_sum_exp_trick(x, batch_size, axis=1):
+            # Compute along batch dimension
+            x = tf.squeeze(x)
+            x_max = tf.reduce_max(x)
+            # lse = x_max + tf.log(tf.reduce_mean(tf.exp(x-x_max)))
+            lse = x_max + tf.log(tf.reduce_sum(tf.exp(x-x_max))) - tf.log(batch_size)
+            return lse
 
-        return MI_lower_bound
+        joint_f = statistic_network(z)
+        marginal_f = statistic_network(z_prime, reuse=True)
+        print('Joint shape', joint_f.shape)
+        print('marginal shape', marginal_f.shape)
 
+        # MI_lower_bound = tf.reduce_mean(joint_f) - tf.log(tf.reduce_mean(tf.exp(marginal_f)) + 1e-5)
+        MI_lower_bound = tf.squeeze(tf.reduce_mean(joint_f)) - tf.squeeze(log_sum_exp_trick(marginal_f,
+            tf.cast(batch_size, tf.float32)))
+
+        joint_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=joint_f,
+            labels=tf.ones_like(joint_f)))
+        marginal_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=marginal_f,
+            labels=tf.zeros_like(marginal_f)))
+
+        JSD_lower_bound = -(marginal_loss + joint_loss) + tf.log(4.0)
+        # JSD_lower_bound = tf.reduce_mean(tf.log(tf.nn.sigmoid(joint_f))) + tf.reduce_mean(tf.log(1.0 -
+        #    tf.nn.sigmoid(marginal_f)))
+
+        # JSD_lower_bound = tf.squeeze(tf.reduce_mean(-tf.nn.softplus(-tf.squeeze(joint_f)))) - tf.squeeze(tf.reduce_mean(tf.nn.softplus(tf.squeeze(marginal_f))))
+
+        if jensen_shannon:
+            lower_bound = JSD_lower_bound
+        else:
+            lower_bound = MI_lower_bound
+
+        return (z, z_prime), (joint_f, marginal_f), lower_bound
+
+
+    @staticmethod
+    def wasserstein_distance(x, y, y_prime, training, batch_size, name='wasserstein', actv=tf.nn.elu, dimension=2, 
+            labels=None, bkg_only=True, gradient_penalty=True, lambda_gp=10.):
+        """
+        Input
+            (x,y):      Drawn from joint
+            y_prime:    Drawn from marginal
+        Output
+            WGAN loss:  Measure of distance between joint and product of marginals
+        """
+
+        init = tf.contrib.layers.xavier_initializer()
+        shape = [128,128,64,32,16,8,4]  # or[256,256]
+        shape = [128,128,128]
+        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
+
+        if bkg_only:
+            batch_size = tf.cast(batch_size - tf.reduce_sum(labels), tf.int32)
+
+        if dimension == 2:
+            y, y_prime = tf.expand_dims(y, axis=1), tf.expand_dims(y_prime, axis=1)
+        if len(x.get_shape().as_list()) < 2:
+            x = tf.expand_dims(x, axis=1)
+        # y_prime = tf.random_shuffle(y)
+
+        z = tf.concat([x,y], axis=1)
+        z_prime = tf.concat([x,y_prime], axis=1)
+        #z.set_shape([None, dimension])
+        #z_prime.set_shape([None, dimension])
+        drop_rate = 0.0
+        print('X SHAPE:', x.get_shape().as_list())
+        print('Z SHAPE:', z.get_shape().as_list())
+        print('Z PRIME SHAPE:', z_prime.get_shape().as_list())
+
+        def statistic_network(t, name='f', reuse=False):
+            with tf.variable_scope(name, initializer=init, reuse=reuse) as scope:
+                # h0 = tf.layers.dense(t, units=shape[0], activation=actv)
+                # h0 = tf.contrib.layers.layer_norm(h0, center=True, scale=True, activation_fn=None)
+                h0 = tf.layers.dense(t, units=shape[0], activation=None)
+                h0 = tf.contrib.layers.layer_norm(h0, center=True, scale=True, activation_fn=actv)
+
+                # h1 = tf.layers.dense(h0, units=shape[1], activation=actv)
+                #h1 = tf.layers.dropout(h1, rate=drop_rate, training=training)
+                #h1 = tf.layers.batch_normalization(h1, **kwargs)
+                # h1 = tf.contrib.layers.layer_norm(h1, center=True, scale=True, activation_fn=None)
+                h1 = tf.layers.dense(h0, units=shape[1], activation=None)
+                h1 = tf.contrib.layers.layer_norm(h1, center=True, scale=True, activation_fn=actv)
+
+                #h2 = tf.layers.dense(h1, units=shape[2], activation=actv)
+                #h2 = tf.layers.dropout(h2, rate=drop_rate, training=training)
+                #h2 = tf.layers.batch_normalization(h2, **kwargs)
+
+                out = tf.layers.dense(h1, units=1, kernel_initializer=init)
+
+            return out
+
+        joint_f = statistic_network(z)
+        marginal_f = statistic_network(z_prime, reuse=True)
+        print('Joint shape', joint_f.shape)
+        print('marginal shape', marginal_f.shape)
+
+        # IPM between joint and marginal - to be maximized
+        # $ W(P,Q) = \sup_{f_L} \{ E_P[f] - E_Q[f]\} $
+        wasserstein_metric = -tf.reduce_mean(joint_f) + tf.reduce_mean(marginal_f)
+        disc_loss = -wasserstein_metric # -wasserstein_metric
+
+        if gradient_penalty:
+            # Enforce unit gradient norm as proxy for bounded Lipschitz constant
+            uniform_dist = tf.contrib.distributions.Uniform(0.,1.)
+            epsilon = uniform_dist.sample([batch_size, tf.shape(z)[1]])
+            # Sample uniformly between linear interpolations
+            z_interpolated = epsilon * z + (1. - epsilon) * z_prime
+            interpolated_f = statistic_network(z_interpolated, reuse=True)
+            grads = tf.gradients(interpolated_f, [z_interpolated])[0]
+            grads_l2 = tf.sqrt(tf.reduce_sum(tf.square(grads), axis=-1))
+            gradient_penalty = tf.reduce_mean(tf.square(grads_l2-1.0))
+
+            tf.summary.scalar("grad_penalty", gradient_penalty)
+            tf.summary.scalar("grad_l2_norm", tf.nn.l2_loss(grads))
+
+            disc_loss += lambda_gp * gradient_penalty
+
+        return wasserstein_metric, disc_loss

@@ -21,7 +21,8 @@ def evaluate(config, args):
     assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
     
     print('Reading data...')
-    eval_df, eval_features, eval_labels, eval_pivots = Data.load_data(args.input, evaluate=True, adversary=config.use_adversary)
+    eval_df, eval_features, eval_labels, eval_pivots = Data.load_data(args.input, evaluate=True,
+            adversary=config.use_adversary, parquet=args.parquet)
     config.max_seq_len = int(eval_features.shape[1]/config.features_per_particle)
 
     # Build graph
@@ -50,17 +51,19 @@ def evaluate(config, args):
         sess.run(cnn.val_iterator.initializer, feed_dict={cnn.features_placeholder: eval_features,
             cnn.labels_placeholder: eval_labels, cnn.pivots_placeholder: eval_pivots})
 
-        labels, probs, preds, raw_output, xentropy, fisher = list(), list(), list(), list(), list(), list()
+        labels, probs, preds, raw_output, xentropy, fisher, pivots = list(), list(), list(), list(), list(), list(), list()
+
         while True:
             try:
                 eval_dict = {cnn.training_phase: False, cnn.handle: val_handle}
-                y_true, y_prob, y_pred, logits, xent, observed_fisher = sess.run([cnn.labels, cnn.softmax, cnn.pred,
-                    cnn.logits, cnn.cross_entropy, cnn.observed_fisher_information], feed_dict=eval_dict)
+                y_true, y_prob, y_pred, logits, xent, z = sess.run([cnn.labels, cnn.softmax, cnn.pred,
+                    cnn.logits, cnn.cross_entropy, cnn.pivots], feed_dict=eval_dict)
                 probs.append(np.squeeze(y_prob))
                 preds.append(np.squeeze(y_pred))
                 labels.append(y_true)
                 xentropy.append(np.squeeze(xent))
                 raw_output.append(np.squeeze(logits))
+                pivots.append(np.squeeze(z))
         #         fisher.append(observed_fisher)
 
             except tf.errors.OutOfRangeError:
@@ -72,22 +75,29 @@ def evaluate(config, args):
         y_true = np.hstack(labels)
         xentropy = np.hstack(xentropy)
         logits = np.hstack(raw_output)
+        pivots = np.vstack(pivots)
+        print('pivots', pivots.shape)
         # observed_fisher = np.hstack(fisher)
+        max_length = y_prob.shape[0]
+        eval_df = eval_df[:max_length]
+        print('eval_df shape', eval_df.shape)
 
         eval_df['y_pred'] = y_pred
         eval_df['y_prob'] = y_prob
         eval_df['y_true'] = y_true
         eval_df['xentropy'] = xentropy
         eval_df['logits'] = logits
+        eval_df['pivots'] = pivots[:,0]
+        eval_df['pivots_marginal'] = pivots[:,1]
         # eval_df['fisher'] = observed_fisher
 
         v_acc = np.equal(y_true, y_pred).mean()
         v_auc = roc_auc_score(y_true, y_prob)
 
-        out = os.path.basename(os.path.splitext(args.input)[0])
+        out = args.out
         print('Running over {} with signal/background ratio {:.3f}'.format(out, y_true.mean()))
         h5_out = os.path.join(directories.results, '{}_{}_results.h5'.format(out, args.architecture))
-        eval_df.to_hdf(h5_out, key='df')
+        eval_df.to_hdf(h5_out, key='df', mode='w')
         print('Saved to', h5_out)
         # Utils.plot_ROC_curve(eval_df['y_true'], eval_df['y_prob'], 
         #        meta=r'$b \rightarrow s \gamma$' + ' Channel {}'.format(int(eval_df['B_ewp_channel'].head().mean())), out=out)
@@ -105,6 +115,9 @@ def main(**kwargs):
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
         choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection', 'dense')))
+    parser.add_argument("-pq", "--parquet", help="Use if dataset is in parquet format", action="store_true")
+    parser.add_argument("-fisher", "--fisher_penalty", help="Penalize Fisher Information of pivots", action="store_true")
+    parser.add_argument("-o", "--out", default='mein_model', help="Output filename")
     args = parser.parse_args()
 
     # Evaluate

@@ -167,7 +167,7 @@ class Utils(object):
             return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=tf.get_variable_scope().name)
 
     @staticmethod
-    def plot_distributions(model, name, epoch, step, sess, handle, nbins=64, notebook=False, multiple_pivots=False):
+    def plot_distributions(model, name, epoch, step, sess, handle, path='.', nbins=64, notebook=False, multiple_pivots=False):
 
         import matplotlib as mpl
         mpl.use('Agg')
@@ -183,13 +183,13 @@ class Utils(object):
         assert pivots.shape[0] == labels.shape[0], 'Shape mismatch along batch dimension.'
         df_z = pd.DataFrame({'mbc': pivots[:,0]})# , 'l_pt': pivots[:,1]})
         df_z = df_z.assign(labels=labels, predictions=predictions, signal_prob=softmax) # softmax[:,1]
+        df_bkg = df_z[df_z['labels']<0.5]
 
         def normPlot(variable, pdf, epoch, signal, nbins=42, bkg_rejection=0.99, plot_hist=True):
             titles={'mbc': r'$M_{bc}$ (GeV)', 'deltae': r'$\Delta E$ (GeV)', 'daughterInvM': r'$M_{X_q}$ (GeV)', 
                     'q_sq': r'$M_{\ell\ell}^2$ (GeV$^2$)', 'l_pt': r'$(\ell\ell)_{p_t}$'}
             bkg = pdf[pdf['labels']<0.5]
             post_bkg = bkg.nlargest(int(bkg.shape[0]*(1-bkg_rejection)), columns=['signal_prob'])
-            threshold = post_bkg['signal_prob'].min()
             if signal:
                 sig = pdf[pdf['labels']>0.5]
                 post_sig = pdf[(pdf['labels']==1) & (pdf['predictions']>threshold)]
@@ -210,7 +210,7 @@ class Utils(object):
 
             if variable == 'mbc':
                 plt.xlim([5.22, 5.30])
-                plt.ylim([0, 30])
+                plt.ylim([0,40])
             # elif variable == 'q_sq':
             #    plt.xlim([1.0,6.0])
             else:
@@ -220,9 +220,9 @@ class Utils(object):
                 plt.show()
             else:
                 disttype = 'signal' if signal else 'bkg'
-                plt.savefig('graphs/{}_{}_dist_adv-ep{}-{}_{}.pdf'.format(variable, disttype, epoch, step, name), bbox_inches='tight',format='pdf', dpi=512)
-                plt.savefig('graphs/{}_{}_dist_adv-ep{}-{}_{}.png'.format(variable, disttype, epoch, step, name),
-                        bbox_inches='tight',format='png', dpi=128)
+                # plt.savefig('graphs/{}_{}_dist_adv-ep{}-{}_{}.pdf'.format(variable, disttype, epoch, step, name), bbox_inches='tight',format='pdf', dpi=512)
+                plt.savefig(os.path.join(path,'graphs/{}_{}_dist_adv-ep{}-{}_{}.png').format(variable, disttype, epoch, step, name),
+                    bbox_inches='tight',format='png', dpi=128)
             plt.gcf().clear()
 
         def binscatter(variable, x, y, nbins=69):
@@ -233,18 +233,18 @@ class Utils(object):
             mean = sy / n
             std = np.sqrt(np.square(sy2/n - mean*mean))/4
             bins = (_[1:] + _[:-1])/2
-            plt.errorbar(bins, mean, yerr=std, fmt='ro', label='Traditional NN', markersize=6, alpha=0.8)
+            plt.errorbar(bins, mean, yerr=std, fmt='ro', label='MI Penalty', markersize=6, alpha=0.8)
             plt.xlabel(r'{}'.format(titles[variable]))
-            plt.ylabel('NN Posterior')
+            plt.ylabel('NN output')
             plt.legend(loc='best')
             # sns.regplot(bins,mean,order=1, marker='.',color='r')
             if notebook:
                 plt.show()
             else:
-                plt.savefig('graphs/{}_adv-ep{}-{}_scatter_{}.pdf'.format(variable, epoch, step, name),
-                        bbox_inches='tight',format='pdf', dpi=512)
-                plt.savefig('graphs/{}_adv-ep{}-{}_scatter_{}.pdf'.format(variable, epoch, step, name),
-                        bbox_inches='tight',format='pdf', dpi=128)
+                # plt.savefig('graphs/{}-ep{}-{}_scatter_{}.pdf'.format(variable, epoch, step, name),
+                #    bbox_inches='tight',format='pdf', dpi=256)
+                plt.savefig(os.path.join('graphs/{}-ep{}-{}_scatter_{}.png').format(variable, epoch, step, name),
+                    bbox_inches='tight',format='png', dpi=128)
             plt.gcf().clear()
 
         normPlot('mbc', df_z, epoch=epoch, signal=False, plot_hist=False)
@@ -259,7 +259,7 @@ class Utils(object):
 
     @staticmethod
     def run_diagnostics(model, config, directories, sess, saver, train_handle,
-            test_handle, start_time, v_auc_best, epoch, step, name):
+            test_handle, start_time, v_auc_best, epoch, step, name, fisher_penalty):
         t0 = time.time()
         improved = ''
         sess.run(tf.local_variables_initializer())
@@ -273,8 +273,11 @@ class Utils(object):
         except tf.errors.OutOfRangeError:
             t_auc, t_loss, t_acc = float('nan'), float('nan'), float('nan')
 
-        v_FI, v_MI, v_MI_MINE v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.observed_fisher_information, model.MI_logits_theta_estimate, 
-            model.mI_logits_theta_MINE, model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test)
+        if fisher_penalty:
+            v_FI, v_MI_kraskov, v_MI_MINE, v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.observed_fisher_information, model.MI_logits_theta_kraskov, model.MI_logits_theta,
+                model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test) # TEST
+        else:
+            v_MI_kraskov, v_MI_MINE, v_MI_labels_kraskov, v_MI_labels_MINE, v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.MI_logits_theta_kraskov, model.MI_logits_theta, model.MI_logits_labels_kraskov, model.MI_logits_labels_MINE, model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test) # TEST
         model.test_writer.add_summary(v_summary)
 
         if v_auc > v_auc_best:
@@ -291,7 +294,11 @@ class Utils(object):
             save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
             print('Weights saved to file: {}'.format(save_path))
 
-        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Fisher Info: {:.3f} | MI: {:.3f} | MI_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_FI, v_MI, v_MI_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        if fisher_penalty:
+            print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | Fisher Info: {:.3f} | MI_kraskov: {:.3f} | MI_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc,
+                        v_acc, v_auc, v_FI, v_MI_kraskov, v_MI_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        else:
+            print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | MI_kraskov: {:.3f} | MI_MINE: {:.3f} | MI_labels_kraskov: {:.3f} | | MI_labels_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_MI_kraskov, v_MI_MINE, v_MI_labels_kraskov, v_MI_labels_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
         Utils.plot_distributions(model, name, epoch, step, sess, handle=test_handle)
 
         return v_auc_best
@@ -307,8 +314,8 @@ class Utils(object):
 
         t_acc, t_loss, t_auc, t_summary = sess.run([model.accuracy, model.cost, model.auc_op, model.merge_op],
                                             feed_dict = feed_dict_train)
-        v_ops = [model.accuracy, model.cost, model.adv_loss, model.auc_op, model.total_loss, model.merge_op]
-        v_acc, v_loss, v_adv_loss, v_auc, v_total, v_summary = sess.run(v_ops, feed_dict=feed_dict_test)
+        v_ops = [model.accuracy, model.cost, model.MI_logits_theta_kraskov, model.adv_loss, model.auc_op, model.total_loss, model.merge_op]
+        v_acc, v_loss, v_MI, v_adv_loss, v_auc, v_total, v_summary = sess.run(v_ops, feed_dict=feed_dict_test)
         model.train_writer.add_summary(t_summary)
         model.test_writer.add_summary(v_summary)
 
@@ -326,11 +333,83 @@ class Utils(object):
             save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
             print('Weights saved to file: {}'.format(save_path))
 
-        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} | Adv. loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_loss, v_auc, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test Loss: {:.3f} | Test AUC: {:.3f} | Mutual Info: {:.3f} | : Adv. loss: {:.3f} | Total loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch,
+                    t_acc, v_acc, v_loss, v_auc, v_MI, v_adv_loss, v_total, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
         Utils.plot_distributions(model, name, epoch, step, sess, handle=test_handle)
 
 
         return v_auc_best
+
+    @staticmethod
+    def run_diagnostics_wasserstein(model, config, directories, sess, saver, train_handle,
+            test_handle, start_time, v_auc_best, epoch, step, name):
+        t0 = time.time()
+        improved = ''
+        sess.run(tf.local_variables_initializer())
+        feed_dict_train = {model.training_phase: False, model.handle: train_handle}
+        feed_dict_test = {model.training_phase: False, model.handle: test_handle}
+
+        try:
+            t_auc, t_acc, t_loss, t_summary = sess.run([model.auc_op, model.accuracy, model.cost, model.merge_op], 
+                feed_dict=feed_dict_train)
+            model.train_writer.add_summary(t_summary)
+        except tf.errors.OutOfRangeError:
+            t_auc, t_loss, t_acc = float('nan'), float('nan'), float('nan')
+
+        v_MI_kraskov, v_WD, v_disc_cost, v_MI_labels_kraskov, v_MI_labels_MINE, v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.MI_logits_theta_kraskov, model.wasserstein_metric, model.disc_cost, model.MI_logits_labels_kraskov, model.MI_logits_labels_MINE, model.auc_op, model.accuracy, model.cost, model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test) # TEST
+        model.test_writer.add_summary(v_summary)
+
+        if v_auc > v_auc_best:
+            v_auc_best = v_auc
+            improved = '[*]'
+            if epoch>5:
+                save_path = saver.save(sess,
+                            os.path.join(directories.checkpoints_best, 'wasserstein_{}_epoch{}.ckpt'.format(name, epoch)),
+                            global_step=epoch)
+                print('Weights saved to file: {}'.format(save_path))
+
+        if step % 10000 == 0:
+            save_path = saver.save(sess, os.path.join(directories.checkpoints, 'wasserstein_{}_epoch{}.ckpt'.format(name, epoch)), global_step=epoch)
+            print('Weights saved to file: {}'.format(save_path))
+
+        print('Epoch {} | Training Acc: {:.3f} | Test Acc: {:.3f} | Test auc: {:.3f} | MI_kraskov: {:.3f} | Disc. cost: {:.3f} | WM: {:.3f} | MI_labels_kraskov: {:.3f} | | MI_labels_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | Rate: {} examples/s ({:.2f} s) {}'.format(epoch, t_acc, v_acc, v_auc, v_MI_kraskov, v_disc_cost, v_WD, v_MI_labels_kraskov, v_MI_labels_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        Utils.plot_distributions(model, name, epoch, step, sess, handle=test_handle)
+
+        return v_auc_best
+
+    @staticmethod
+    def run_tune_diagnostics(model, config, directories, sess, saver, train_handle,
+            test_handle, start_time, v_auc_best, block, step, name):
+        t0 = time.time()
+        improved = ''
+        sess.run(tf.local_variables_initializer())
+        feed_dict_train = {model.training_phase: False, model.handle: train_handle}
+        feed_dict_test = {model.training_phase: False, model.handle: test_handle}
+
+        try:
+            t_auc, t_acc, t_loss, t_summary = sess.run([model.auc_op, model.accuracy, model.cost, model.merge_op], 
+                feed_dict=feed_dict_train)
+            model.train_writer.add_summary(t_summary)
+        except tf.errors.OutOfRangeError:
+            t_auc, t_loss, t_acc = float('nan'), float('nan'), float('nan')
+
+        v_MI_kraskov, v_MI_MINE, v_MI_labels_kraskov, v_MI_labels_MINE, v_auc, v_acc, v_loss, v_summary, y_true, y_pred = sess.run([model.MI_logits_theta_kraskov, 
+            model.MI_logits_theta, model.MI_logits_labels_kraskov, 
+            model.MI_logits_labels_MINE, model.auc_op, model.accuracy, model.cost, 
+            model.merge_op, model.labels, model.pred], feed_dict=feed_dict_test) # TEST
+        model.test_writer.add_summary(v_summary)
+
+        if v_auc > v_auc_best:
+            v_auc_best = v_auc
+            improved = '[*]'
+
+        print("Block {} | Test Acc: {:.3f} | Train auc: {:.3f} | Test auc: {:.3f} | MI_kraskov: {:.3f} | MI_MINE: {:.3f} | " 
+                "MI_labels_kraskov: {:.3f} | MI_labels_MINE: {:.3f} | Train Loss: {:.3f} | Test Loss: {:.3f} | "
+                "Rate: {} examples/s ({:.2f} s) {}".format(block, v_acc, t_auc, v_auc, v_MI_kraskov, v_MI_MINE, v_MI_labels_kraskov, 
+                v_MI_labels_MINE, t_loss, v_loss, int(config.batch_size/(time.time()-t0)), time.time() - start_time, improved))
+        Utils.plot_distributions(model, name, block, step, sess, handle=test_handle, path='/home/jtan/gpu/jtan/github/fisher')
+
+        return v_auc_best, v_auc, v_acc, v_loss
 
     @staticmethod
     def plot_ROC_curve(y_true, y_pred, out, meta = ''):
@@ -380,8 +459,8 @@ class Utils(object):
     def mutual_information_1D_kraskov(x, y):
         # k-NN based estimate of mutual information
         from lnc import MI
-        mi = MI.mi_LNC([x,y],k=5,base=np.exp(1),alpha=0.2)
 
+        mi = MI.mi_LNC([x,y],k=5,base=np.exp(1),alpha=0.2)
         return mi
 
     @staticmethod

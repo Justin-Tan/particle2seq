@@ -10,7 +10,7 @@ import argparse
 from network import Network
 from utils import Utils
 from data import Data
-from model import Model
+from wgan_model import Model
 from config import config_train, directories
 
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -66,19 +66,18 @@ def train(config, args):
 
         mutual_info_kraskov = list()
         mutual_info_MINE = list()
-        MINE_iters = 32 #32 # 128 # 256
-        MINE_label_iters = 1
+        disc_iters = 8 # 128 # 256
 
         for epoch in range(start_epoch, config.num_epochs):
             sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, 
                 cnn.labels_placeholder:labels, cnn.pivots_placeholder:pivots})
 
             # Run utils
-            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
-                test_handle, start_time, v_auc_best, epoch, global_step, args.name, args.fisher_penalty)
+            v_auc_best = Utils.run_diagnostics_wasserstein(cnn, config_train, directories, sess, saver, train_handle,
+                test_handle, start_time, v_auc_best, epoch, global_step, args.name)
 
             if epoch > 0:
-                save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
+                save_path = saver.save(sess, os.path.join(directories.checkpoints, 'wgan_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
                 print('Starting epoch {}, Weights saved to file: {}'.format(epoch, save_path))
 
             while True:
@@ -87,22 +86,18 @@ def train(config, args):
                     global_step, *ops = sess.run([cnn.global_step, cnn.opt_op, cnn.MINE_labels_train_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
 
                     if args.mutual_information_penalty:
-                        for _ in range(MINE_iters):
-                            sess.run(cnn.MINE_train_op, feed_dict={cnn.training_phase: True, cnn.handle: test_handle})  # or train handle??
+                        for _ in range(disc_iters):
+                            sess.run(cnn.disc_train_op, feed_dict={cnn.training_phase: True, cnn.handle: test_handle})  # or train handle??
 
-                    if global_step % 500 == 0:
+                    if global_step % 1000 == 0:
                         # Run utils
-                        v_MI_kraskov, v_MI_MINE = sess.run([cnn.MI_logits_theta_kraskov, cnn.MI_logits_theta], 
-                                feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
-                        v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
-                            test_handle, start_time, v_auc_best, epoch, global_step, args.name, args.fisher_penalty)
-                        grads = sess.run(cnn.grad_loss)
-                        print('Lambda: {}, Loss gradient: {}'.format(args.MI_lambda, grads)) 
+                        v_MI_kraskov = sess.run([cnn.MI_logits_theta_kraskov], feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
+                        v_auc_best = Utils.run_diagnostics_wasserstein(cnn, config_train, directories, sess, saver, train_handle,
+                            test_handle, start_time, v_auc_best, epoch, global_step, args.name)
                         mutual_info_kraskov.append(v_MI_kraskov)
-                        mutual_info_MINE.append(v_MI_MINE)
 
-                    if global_step % 2500 == 0:
-                        save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
+                    if global_step % 10000 == 0:
+                        save_path = saver.save(sess, os.path.join(directories.checkpoints, 'wass_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
                         print('Weights saved to file: {}'.format(save_path))
 
                 except tf.errors.OutOfRangeError:
@@ -113,9 +108,7 @@ def train(config, args):
                     save_path = saver.save(sess, os.path.join(directories.checkpoints,
                         'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
                     mi_k = np.array(mutual_info_kraskov)
-                    mi_m = np.array(mutual_info_MINE) 
                     np.save('mi_kraskov_{}.npy'.format(args.name), mi_k)
-                    np.save('mi_MINE_{}.npy'.format(args.name), mi_m)
                     print('Interrupted, model saved to: ', save_path)
                     sys.exit()
 
@@ -124,9 +117,7 @@ def train(config, args):
                                global_step=epoch)
 
     mi_k = np.array(mutual_info_kraskov)
-    mi_m = np.array(mutual_info_MINE) 
     np.save('mi_kraskov_{}.npy'.format(args.name), mi_k)
-    np.save('mi_MINE_{}.npy'.format(args.name), mi_m)
     print("Training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
 
 def main(**kwargs):
@@ -142,8 +133,6 @@ def main(**kwargs):
     parser.add_argument("-fisher", "--fisher_penalty", help="Penalize Fisher Information of pivots", action="store_true")
     parser.add_argument("-pq", "--parquet", help="Use if dataset is in parquet format", action="store_true")
     parser.add_argument("-MI", "--mutual_information_penalty", help="Penalize mutual information between pivots and logits", action="store_true")
-    parser.add_argument("-JSD", "--JSD", help="Use Jensen-Shannon approximation of mutual information", action="store_true")
-    parser.add_argument("-reg", "--regularizer", help="Toggle gradient-based regularization", action="store_true")
     parser.add_argument("-lambda", "--MI_lambda", default=0.0, help="Control tradeoff between xentropy and MI penalization", type=float)
     parser.add_argument("-re", "--restart_epoch", default=0, help="Epoch to restart from", type=int)
 

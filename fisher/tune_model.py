@@ -10,8 +10,11 @@ from adversary import Adversary
 from utils import Utils
 
 class Model():
-    def __init__(self, config, features, labels, args, evaluate=False):
-        # Build the computational graph
+    def __init__(self, config, tune_config, features, labels, args, evaluate=False):
+        """
+        Build the computational graph
+        tune_config: Dictionary of hyperparameters to be tuned
+        """
 
         arch = Network.sequence_deep_conv
         sequential = True 
@@ -83,11 +86,6 @@ class Model():
         #    self.pivots = tf.expand_dims(self.pivots, axis=1)
         self.pivots.set_shape([None, 2*len(config.pivots)])
 
-        if args.fisher_penalty:
-            # Fisher information check
-            self.example = tf.concat([self.example, self.pivots], axis=1)
-            # print('Shape of combined:', self.example.get_shape().as_list())
-
         if evaluate:
             # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
             with tf.variable_scope('classifier') as scope:
@@ -101,11 +99,6 @@ class Model():
                 labels=(1-tf.one_hot(self.labels, depth=1)))
 
             log_likelihood = -tf.reduce_sum(self.cross_entropy)
-
-            if args.fisher_penalty:
-                dldTheta = tf.gradients(log_likelihood, self.pivots)[0]
-                self.observed_fisher_information = tf.square(tf.squeeze(dldTheta))
-            return
 
         # embeddings = tf.nn.embedding_lookup(embedding_encoder, ids=self.example)
 
@@ -146,13 +139,6 @@ class Model():
                 labels=(1-tf.one_hot(self.labels, depth=1)))
             self.cost = tf.reduce_mean(self.cross_entropy)
 
-            if args.fisher_penalty:
-                log_likelihood = -tf.reduce_sum(self.cross_entropy)
-                dldTheta = tf.gradients(log_likelihood, self.pivots)[0]
-                self.observed_fisher_information = tf.reduce_mean(tf.square(tf.squeeze(dldTheta)))
-                bkg_dldTheta = tf.boolean_mask(dldTheta, tf.cast((1-self.labels), tf.bool))
-                self.observed_bkg_fisher_information = tf.reduce_mean(tf.square(tf.squeeze(bkg_dldTheta)))
-
             self.MI_logits_theta_kraskov = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.logits),
                 tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
             self.MI_xent_theta_kraskov = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.cross_entropy),
@@ -189,24 +175,6 @@ class Model():
                 labels=(1-tf.one_hot(self.labels, depth=1)))
             self.cost = tf.reduce_mean(self.cross_entropy)
 
-            if args.fisher_penalty:
-                # Calculate Fisher Information matrix
-                bkg_xentropy = tf.boolean_mask(self.cross_entropy, tf.logical_not(tf.cast(self.labels, tf.bool)))
-                log_likelihood = -tf.reduce_sum(self.cross_entropy)
-
-                dldTheta = tf.gradients(log_likelihood, self.pivots)[0]
-                self.observed_fisher_information = tf.reduce_mean(tf.square(tf.squeeze(dldTheta)))
-
-                bkg_dldTheta = tf.boolean_mask(dldTheta, tf.cast((1-self.labels), tf.bool))
-                self.observed_bkg_fisher_information = tf.reduce_mean(tf.square(tf.squeeze(bkg_dldTheta)))
-
-                dfdTheta = tf.gradients(self.logits, self.pivots)[0]
-                bkg_dfdTheta = tf.boolean_mask(dldTheta, tf.cast((1-self.labels), tf.bool))
-
-                self.output_gradients = tf.reduce_mean(tf.square(tf.squeeze(dfdTheta)))
-                bkg_output_gradients = tf.reduce_mean(tf.square(tf.squeeze(bkg_dfdTheta)))
-
-
             X = self.logits
             X_bkg = tf.boolean_mask(X, tf.cast((1-self.labels), tf.bool))
             # Calculate mutual information
@@ -222,7 +190,7 @@ class Model():
                 #        dimension=2, training=True, actv=tf.nn.elu, jensen_shannon=args.JSD)
                  
                 (x_joint, x_marginal), (joint_f, marginal_f), self.MI_logits_theta = Network.MINE(x=X_bkg, y=Z_bkg, y_prime=Z_prime_bkg,
-                        batch_size=config.batch_size, dimension=2, training=True, actv=tf.nn.elu, labels=self.labels, bkg_only=True, jensen_shannon=args.JSD)
+                        batch_size=config.batch_size, dimension=2, training=True, actv=tf.nn.elu, labels=self.labels, bkg_only=True, jensen_shannon=tune_config['jsd'])
 
             self.MI_logits_theta_kraskov = tf.py_func(Utils.mutual_information_1D_kraskov, inp=[tf.squeeze(self.logits),
                 tf.squeeze(self.pivots[:,0])], Tout=tf.float64)
@@ -238,21 +206,12 @@ class Model():
                 *reg_terms, self.MI_logits_labels_MINE = Network.MINE(x=X, y=Y, y_prime=Y_prime, batch_size=config.batch_size,
                         dimension=2, training=self.training_phase, actv=tf.nn.elu)
 
-            # Alternatively, calculate the observed Fisher Information as the negative expected Hessian(ll)
-            #hessian_ll = tf.hessians(log_likelihood, self.pivots)
-            #FIM = -tf.squeeze(hessian_ll)
-            #self.observed_fisher_diagonal_from_hessian = tf.diag_part(FIM)
-            #self.observed_bkg_fisher_diagonal_from_hessian = tf.boolean_mask(self.observed_fisher_diagonal_from_hessian, 
-            #    tf.cast((1-self.labels), tf.bool))
-            #self.observed_fisher_information_from_hessian = tf.trace(FIM)
-            #self.observed_bkg_fisher_information_from_hessian = tf.reduce_sum(self.observed_bkg_fisher_diagonal_from_hessian)
-
             theta_f = Utils.scope_variables('classifier')
             theta_MINE = Utils.scope_variables('MINE')
             theta_MINE_NY = Utils.scope_variables('LABEL_MINE')
-            print('Classifier parameters:', theta_f)
-            print('mine parameters', theta_MINE)
-            print('Label mine parameters', theta_MINE_NY)
+            # print('Classifier parameters:', theta_f)
+            # print('mine parameters', theta_MINE)
+            # print('Label mine parameters', theta_MINE_NY)
             
 
             with tf.control_dependencies(update_ops):
@@ -260,31 +219,15 @@ class Model():
                 self.MINE_lower_bound = self.MI_logits_theta
                 self.MINE_labels_lower_bound = self.MI_logits_labels_MINE
 
-            if args.fisher_penalty:
-                print('Penalizing Fisher Information')
-                self.cost += config.fisher_penalty * self.observed_fisher_information
-
-            if args.regularizer and args.JSD:
-                print('Using Jensen-Shannon regularizer')
-                joint_logit_grads = tf.gradients(self.joint_f, self.x_joint)[0]
-                marginal_logit_grads = tf.gradients(self.marginal_f, self.x_marginal)[0]
-                gamma_0, alpha_0 = 2.0, 0.1
-                gamma = tf.train.exponential_decay(gamma_0, decay_rate=alpha_0, global_step=self.global_step,
-                    decay_steps=10**6)
-                self.jsd_regularizer = tf.reduce_mean((1.0 - tf.nn.sigmoid(self.joint_f))**2 * tf.square(joint_logit_grads)) + tf.reduce_mean( tf.nn.sigmoid(self.marginal_f)**2 * tf.square(marginal_logit_grads))
                 
             if args.mutual_information_penalty:
                 print('Penalizing mutual information')
-                if args.regularizer and args.JSD: 
-                    self.cost += args.MI_lambda * (tf.nn.relu(self.MINE_lower_bound) - config.gamma/2.0 *
-                        self.jsd_regularizer)
-                else:
                     # 'minmax' loss
                     # heuristic 'non-saturating loss'
                     # heuristic_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=marginal_f, labels=tf.ones_like(marginal_f))) 
                     # heuristic_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=joint_f, labels=tf.zeros_like(joint_f)))
                     # self.cost += args.MI_lambda * heuristic_loss
-                    self.cost += args.MI_lambda * tf.nn.relu(self.MINE_lower_bound)
+                self.cost += tune_config['MI_lambda'] * tf.nn.relu(self.MINE_lower_bound)
                     # self.cost += args.MI_lambda * tf.square(self.MINE_lower_bound)
                 # self.cost += -config.MI_label_lagrange_multiplier * tf.nn.relu(self.MI_logits_labels_MINE)
 
@@ -292,7 +235,7 @@ class Model():
 
                 args.optimizer = args.optimizer.lower()
                 if args.optimizer=='adam':
-                    self.opt = tf.train.AdamOptimizer(config.learning_rate)
+                    self.opt = tf.train.AdamOptimizer(tune_config['learning_rate'])
                 elif args.optimizer=='momentum':
                     self.opt = tf.train.MomentumOptimizer(config.learning_rate, config.momentum,
                         use_nesterov=True)
@@ -308,10 +251,9 @@ class Model():
             
             # MINE_opt = tf.train.MomentumOptimizer(1e-4, momentum=0.9, use_nesterov=True)
             # MINE_opt = tf.train.GradientDescentOptimizer(1e-2)
-            MINE_opt = tf.train.AdamOptimizer(config.MINE_learning_rate)
+            MINE_opt = tf.train.AdamOptimizer(tune_config['MINE_learning_rate'])
 
-            self.MINE_opt_op = MINE_opt.minimize(-self.MINE_lower_bound, var_list=theta_MINE,
-                    global_step=self.MINE_step)
+            self.MINE_opt_op = MINE_opt.minimize(-self.MINE_lower_bound, var_list=theta_MINE, global_step=self.MINE_step)
 
             self.MINE_labels_opt_op = MINE_opt.minimize(-self.MINE_labels_lower_bound, var_list=theta_MINE_NY)
             
@@ -336,17 +278,11 @@ class Model():
         self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         tf.summary.scalar('accuracy', self.accuracy)
-        tf.summary.scalar('learning_rate', learning_rate)
         tf.summary.scalar('cost', self.cost)
         tf.summary.scalar('auc', self.auc_op)
         tf.summary.scalar('logits_theta_MI', self.MI_logits_theta_kraskov)
         tf.summary.scalar('xent_theta_MI', self.MI_xent_theta_kraskov)    
         tf.summary.scalar('logits_labels_MI', self.MI_logits_labels_kraskov)
-
-
-        if args.fisher_penalty:
-            tf.summary.scalar('fisher_information', self.observed_fisher_information)
-            tf.summary.scalar('bkg_fisher_information', self.observed_bkg_fisher_information)
 
         pivot = 'Mbc'
         tf.summary.histogram('true_{}_background_distribution'.format(pivot), true_background_pivots[:,0])

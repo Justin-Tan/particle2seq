@@ -48,7 +48,7 @@ class Adversary(object):
         self.cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(logits=classifier_logits, labels=(1-tf.one_hot(labels, depth=1)))
         self.predictor_loss = tf.reduce_mean(self.cross_entropy)
 
-        self.total_loss = self.predictor_loss - config.adv_lambda*self.adversary_combined_loss
+        self.total_loss = self.predictor_loss - args.adv_lambda*self.adversary_combined_loss
     
         theta_f = Utils.scope_variables('classifier')
         theta_r = Utils.scope_variables('adversary')
