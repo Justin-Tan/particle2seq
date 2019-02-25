@@ -29,6 +29,7 @@ class config_train(object):
     D_learning_rate = 1e-5
     MI_label_lagrange_multiplier = 5.0
     gamma = 0.1
+    lr_schedule = 'constant'
 
     # Adversary hyperparameters
     use_adversary = False

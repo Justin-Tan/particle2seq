@@ -10,7 +10,7 @@ import argparse
 from network import Network
 from utils import Utils
 from data import Data
-from model import Model
+from mmd_model import Model
 from config import config_train, directories
 
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -35,14 +35,14 @@ def train(config, args):
     config.max_seq_len = int(features.shape[1]/config.features_per_particle)
 
     # Build graph
-    cnn = Model(config, features=features, labels=labels, args=args)
+    model = Model(config, features=features, labels=labels, args=args)
     saver = tf.train.Saver()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        train_handle = sess.run(cnn.train_iterator.string_handle())
-        test_handle = sess.run(cnn.test_iterator.string_handle())
+        train_handle = sess.run(model.train_iterator.string_handle())
+        test_handle = sess.run(model.test_iterator.string_handle())
 
         if args.restore_last and ckpt.model_checkpoint_path:
             # Continue training saved model
@@ -58,52 +58,42 @@ def train(config, args):
             else:
                 start_epoch = 0
                 
-        sess.run(cnn.test_iterator.initializer, feed_dict={
-            cnn.test_features_placeholder:test_features,
-            cnn.test_pivots_placeholder:test_pivots,
-            cnn.pivots_placeholder:test_pivots,
-            cnn.test_labels_placeholder:test_labels})
+        sess.run(model.test_iterator.initializer, feed_dict={
+            model.test_features_placeholder:test_features,
+            model.test_pivots_placeholder:test_pivots,
+            model.pivots_placeholder:test_pivots,
+            model.test_labels_placeholder:test_labels})
 
         mutual_info_kraskov = list()
-        mutual_info_MINE = list()
-        MINE_iters = 32 #32 # 128 # 256
-        MINE_label_iters = 1
 
         for epoch in range(start_epoch, config.num_epochs):
-            sess.run(cnn.train_iterator.initializer, feed_dict={cnn.features_placeholder:features, 
-                cnn.labels_placeholder:labels, cnn.pivots_placeholder:pivots})
+            sess.run(model.train_iterator.initializer, feed_dict={model.features_placeholder:features, 
+                model.labels_placeholder:labels, model.pivots_placeholder:pivots})
 
             # Run utils
-            v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
+            v_auc_best = Utils.run_diagnostics(model, config_train, directories, sess, saver, train_handle,
                 test_handle, start_time, v_auc_best, epoch, global_step, args.name, args.fisher_penalty)
 
             if epoch > 0:
-                save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
+                save_path = saver.save(sess, os.path.join(directories.checkpoints, 'mmd2_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
                 print('Starting epoch {}, Weights saved to file: {}'.format(epoch, save_path))
 
             while True:
                 try:
                     # Update weights
-                    global_step, *ops = sess.run([cnn.global_step, cnn.opt_op, cnn.MINE_labels_train_op, 
-                        cnn.auc_op, cnn.update_accuracy], feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
-
-                    if args.mutual_information_penalty:
-                        for _ in range(MINE_iters):
-                            sess.run(cnn.MINE_train_op, feed_dict={cnn.training_phase: True, cnn.handle: test_handle})  # or train handle??
+                    global_step, *ops = sess.run([model.global_step, model.opt_op, model.MINE_labels_train_op, 
+                        model.auc_op, model.update_accuracy], feed_dict={model.training_phase: True, model.handle: train_handle})
 
                     if global_step % 500 == 0:
                         # Run utils
-                        v_MI_kraskov, v_MI_MINE = sess.run([cnn.MI_logits_theta_kraskov, cnn.MI_logits_theta], 
-                                feed_dict={cnn.training_phase: True, cnn.handle: train_handle})
-                        v_auc_best = Utils.run_diagnostics(cnn, config_train, directories, sess, saver, train_handle,
-                            test_handle, start_time, v_auc_best, epoch, global_step, args.name, args.fisher_penalty)
-                        grads = sess.run(cnn.grad_loss)
-                        print('Lambda: {}, Loss gradient: {}'.format(args.MI_lambda, grads)) 
+                        v_MI_kraskov = sess.run([model.MI_logits_theta_kraskov], feed_dict={model.training_phase: True, model.handle: train_handle})
+                        v_auc_best, *_ = Utils.run_mmd_diagnostics(model, config_train, directories, sess, saver, train_handle,
+                            test_handle, start_time, v_auc_best, epoch, global_step, args.name)
                         mutual_info_kraskov.append(v_MI_kraskov)
-                        mutual_info_MINE.append(v_MI_MINE)
+
 
                     if global_step % 2500 == 0:
-                        save_path = saver.save(sess, os.path.join(directories.checkpoints, 'conv_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
+                        save_path = saver.save(sess, os.path.join(directories.checkpoints, 'mmd2_{}_epoch{}_step{}.ckpt'.format(args.name, epoch, global_step)), global_step=epoch)
                         print('Weights saved to file: {}'.format(save_path))
 
                 except tf.errors.OutOfRangeError:
@@ -112,22 +102,18 @@ def train(config, args):
 
                 except KeyboardInterrupt:
                     save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                        'p2seq_{}_last.ckpt'.format(args.name)), global_step=epoch)
+                        'mmd2_{}_last.ckpt'.format(args.name)), global_step=epoch)
                     mi_k = np.array(mutual_info_kraskov)
-                    mi_m = np.array(mutual_info_MINE) 
                     np.save('mi_kraskov_{}.npy'.format(args.name), mi_k)
-                    np.save('mi_MINE_{}.npy'.format(args.name), mi_m)
                     print('Interrupted, model saved to: ', save_path)
                     sys.exit()
 
         save_path = saver.save(sess, os.path.join(directories.checkpoints,
-                               'p2seq_{}_end.ckpt'.format(args.name)),
+                               'mmd2_{}_end.ckpt'.format(args.name)),
                                global_step=epoch)
 
     mi_k = np.array(mutual_info_kraskov)
-    mi_m = np.array(mutual_info_MINE) 
     np.save('mi_kraskov_{}.npy'.format(args.name), mi_k)
-    np.save('mi_MINE_{}.npy'.format(args.name), mi_m)
     print("Training Complete. Model saved to file: {} Time elapsed: {:.3f} s".format(save_path, time.time()-start_time))
 
 def main(**kwargs):
@@ -137,15 +123,12 @@ def main(**kwargs):
     parser.add_argument("-i", "--input", default=None, help="Path to training file", type=str)
     parser.add_argument("-test", "--test", default=None, help="Path to test file", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
-    parser.add_argument("-n", "--name", default="p2seq", help="Checkpoint/Tensorboard label")
+    parser.add_argument("-n", "--name", default="mmd2", help="Checkpoint/Tensorboard label")
     parser.add_argument("-arch", "--architecture", default="deep_conv", help="Neural architecture",
         choices=set(('deep_conv', 'recurrent', 'simple_conv', 'conv_projection', 'dense')))
-    parser.add_argument("-fisher", "--fisher_penalty", help="Penalize Fisher Information of pivots", action="store_true")
     parser.add_argument("-pq", "--parquet", help="Use if dataset is in parquet format", action="store_true")
-    parser.add_argument("-MI", "--mutual_information_penalty", help="Penalize mutual information between pivots and logits", action="store_true")
-    parser.add_argument("-JSD", "--JSD", help="Use Jensen-Shannon approximation of mutual information", action="store_true")
-    parser.add_argument("-reg", "--regularizer", help="Toggle gradient-based regularization", action="store_true")
-    parser.add_argument("-lambda", "--MI_lambda", default=0.0, help="Control tradeoff between xentropy and MI penalization", type=float)
+    parser.add_argument("-mmd2", "--mmd2", help="Penalize magnitude of kernel MMD between pivots and logits", action="store_true")
+    parser.add_argument("-lambda", "--mmd_lambda", default=0.0, help="Control tradeoff between xentropy and penalization", type=float)
     parser.add_argument("-re", "--restart_epoch", default=0, help="Epoch to restart from", type=int)
 
     args = parser.parse_args()

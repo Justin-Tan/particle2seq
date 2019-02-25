@@ -26,12 +26,6 @@ class Data(object):
 
         auxillary = ['label'] + [col for col in df.columns if 'deltaE' in col or 'Mbc' in col or 'evtNum' in col or
             'hadronic_mass' in col or 'mctype' in col or 'channel' in col or 'nCands' in col or 'DecayHash' in col or 'decstring' in col]
-        # auxillary = ['labels', 'MCtype', 'channel', 'evtNum', 'idx', 'mbc', 'nCands', 'deltae']
-        #auxillary = ['label', 'B_deltaE', 'B_Mbc', 'l_pt', 'q_sq', 'B_eventCached_boevtNum', 'B_ewp_channel', 'B_dilepton_type']
-        #auxillary += ['nCands', 'B_TagVNTracks']
-        #auxillary += ['B_cms_p', 'B_cms_pt', 'B_cms_q2Bh']
-        #auxillary += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
-        #auxillary += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
 
         df_features = df.drop(auxillary, axis=1)
 
@@ -45,8 +39,7 @@ class Data(object):
             pivot_labels = pivot_df['mbc_labels']
         else:
             pivots = ['B_Mbc'] #, 'B_cms_p', 'B_cms_pt'] #, 'B_cms_q2Bh']
-            # pivots += ['B_ell0_cms_E', 'B_ell0_cms_eRecoil', 'B_ell0_cms_m2Recoil', 'B_ell0_cms_p', 'B_ell0_cms_pt']
-            # pivots += ['B_ell1_cms_E', 'B_ell1_cms_eRecoil', 'B_ell1_cms_m2Recoil', 'B_ell1_cms_p', 'B_ell1_cms_pt']
+
         pivot_df = df[pivots]
         pivot_features = pivot_df[pivots]
 
@@ -77,8 +70,8 @@ class Data(object):
     def load_dataset(features_placeholder, labels_placeholder, pivots_placeholder, batch_size, test=False,
             evaluate=False, sequential=True, prefetch_size=2):
     
-        # def _preprocess(tokens, label):
-        #     return tokens, label
+        # def _preprocess(features, label):
+        #     return features, label
 
         dataset = tf.data.Dataset.from_tensor_slices((features_placeholder, labels_placeholder,
             pivots_placeholder))
